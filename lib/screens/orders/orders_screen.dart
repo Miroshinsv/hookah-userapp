@@ -1,0 +1,236 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../core/auth/auth_state.dart';
+import '../../core/graphql/queries.dart';
+import '../../core/graphql/subscriptions.dart';
+import '../../core/models/order.dart';
+import '../../widgets/status_badge.dart';
+
+class OrdersScreen extends StatefulWidget {
+  const OrdersScreen({super.key});
+
+  @override
+  State<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends State<OrdersScreen> {
+  List<Order> _orders = [];
+  bool _loading = false;
+  String? _error;
+  StreamSubscription<QueryResult<Object?>>? _sub;
+
+  bool _listenerAdded = false;
+  late AuthState _auth;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_listenerAdded) {
+      _listenerAdded = true;
+      _auth = context.read<AuthState>();
+      _auth.addListener(_onAuthChanged);
+      if (_auth.isLoggedIn) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) { _fetch(); _subscribe(); }
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_listenerAdded) _auth.removeListener(_onAuthChanged);
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  void _onAuthChanged() {
+    if (!mounted) return;
+    if (_auth.isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) { _fetch(); _subscribe(); }
+      });
+    } else {
+      _sub?.cancel();
+      _sub = null;
+      setState(() { _orders = []; _error = null; _loading = false; });
+    }
+  }
+
+  GraphQLClient get _client => GraphQLProvider.of(context).value;
+
+  Future<void> _fetch() async {
+    setState(() { _loading = true; _error = null; });
+    final result = await _client.query(QueryOptions(
+      document: gql(GQLQueries.orders),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted) return;
+    if (result.hasException) {
+      setState(() {
+        _loading = false;
+        _error = result.exception?.graphqlErrors.firstOrNull?.message ??
+            'Ошибка загрузки';
+      });
+      return;
+    }
+    final raw = result.data?['orders'] as List<dynamic>? ?? [];
+    setState(() {
+      _loading = false;
+      _orders = raw
+          .map((e) => Order.fromJson(e as Map<String, dynamic>))
+          .toList();
+    });
+  }
+
+  void _subscribe() {
+    final stream = _client.subscribe(SubscriptionOptions(
+      document: gql(GQLSubscriptions.orderStatusChanged),
+    ));
+    _sub = stream.listen((result) {
+      if (!mounted || result.data == null) return;
+      _fetch();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthState>();
+
+    if (!auth.isLoggedIn) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Мои заказы')),
+        body: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_outline, size: 56, color: Colors.grey),
+              SizedBox(height: 12),
+              Text(
+                'Для просмотра заказов\nнеобходимо авторизоваться',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Мои заказы'),
+        actions: [
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+        ],
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading && _orders.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null && _orders.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 12),
+            Text(_error!, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _fetch,
+              child: const Text('Повторить'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_orders.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.receipt_long, size: 56, color: Colors.grey),
+            SizedBox(height: 12),
+            Text('Заказов пока нет',
+                style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _fetch,
+      child: ListView.separated(
+        itemCount: _orders.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (ctx, i) {
+          final o = _orders[i];
+          return _OrderTile(
+            order: o,
+            onTap: () async {
+              await Navigator.pushNamed(ctx, '/order',
+                  arguments: {'order': o});
+              _fetch();
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _OrderTile extends StatelessWidget {
+  final Order order;
+  final VoidCallback onTap;
+
+  const _OrderTile({required this.order, required this.onTap});
+
+  String _formatDate(String? iso) {
+    if (iso == null) return '';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}'
+          ' ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: ClipOval(
+        child: Image.asset('assets/logo.png', width: 40, height: 40,
+            fit: BoxFit.cover),
+      ),
+      title: Text('Заказ #${order.id}',
+          style: const TextStyle(fontWeight: FontWeight.w500)),
+      subtitle: Text(
+        [
+          if (order.flavor != null) order.flavor!,
+          if (order.arrivalAt != null) _formatDate(order.arrivalAt),
+        ].join(' · '),
+        style: const TextStyle(fontSize: 12),
+      ),
+      trailing: StatusBadge(status: order.status),
+      onTap: onTap,
+    );
+  }
+}
