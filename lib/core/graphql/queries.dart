@@ -1,6 +1,18 @@
 import 'dart:convert';
 
 class GQLQueries {
+  static const me = r'''
+    query {
+      me {
+        id
+        userId
+        firstName
+        lastName
+        roles
+      }
+    }
+  ''';
+
   static const lounges = r'''
     query {
       lounges {
@@ -17,7 +29,7 @@ class GQLQueries {
           id
           firstName
           lastName
-          role
+          roles
         }
       }
     }
@@ -32,6 +44,8 @@ class GQLQueries {
         flavor
         comment
         phone
+        firstName
+        lastName
         arrivalAt
         status
         createdAt

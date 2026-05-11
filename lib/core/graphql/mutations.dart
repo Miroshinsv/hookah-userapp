@@ -1,10 +1,21 @@
 import 'dart:convert';
 
 class GQLMutations {
-  static String registerUser(String phone, String password) => '''
+  static String registerUser(
+    String phone,
+    String password, {
+    String? firstName,
+    String? lastName,
+  }) => '''
     mutation {
-      registerUser(phone: ${jsonEncode(phone)}, password: ${jsonEncode(password)}) {
+      registerUser(
+        phone: ${jsonEncode(phone)}
+        password: ${jsonEncode(password)}
+        ${firstName != null && firstName.isNotEmpty ? 'firstName: ${jsonEncode(firstName)}' : ''}
+        ${lastName != null && lastName.isNotEmpty ? 'lastName: ${jsonEncode(lastName)}' : ''}
+      ) {
         token
+        role
       }
     }
   ''';
@@ -24,6 +35,8 @@ class GQLMutations {
     required String flavor,
     String? comment,
     required String phone,
+    String? firstName,
+    String? lastName,
     required String arrivalAt,
   }) => '''
     mutation {
@@ -32,10 +45,29 @@ class GQLMutations {
         flavor: ${jsonEncode(flavor)}
         ${comment != null ? 'comment: ${jsonEncode(comment)}' : ''}
         phone: ${jsonEncode(phone)}
+        ${firstName != null && firstName.isNotEmpty ? 'firstName: ${jsonEncode(firstName)}' : ''}
+        ${lastName != null && lastName.isNotEmpty ? 'lastName: ${jsonEncode(lastName)}' : ''}
         arrivalAt: ${jsonEncode(arrivalAt)}
       ) {
         id
         status
+      }
+    }
+  ''';
+
+  static String updateUser({
+    required String staffId,
+    String? firstName,
+    String? lastName,
+  }) => '''
+    mutation {
+      updateStaff(
+        staffId: ${jsonEncode(staffId)}
+        ${firstName != null ? 'firstName: ${jsonEncode(firstName)}' : ''}
+        ${lastName != null ? 'lastName: ${jsonEncode(lastName)}' : ''}
+      ) {
+        firstName
+        lastName
       }
     }
   ''';

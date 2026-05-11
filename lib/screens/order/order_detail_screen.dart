@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/chat/unread_state.dart';
 import '../../core/graphql/mutations.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/graphql/subscriptions.dart';
@@ -20,11 +21,11 @@ class OrderDetailScreen extends StatefulWidget {
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final _messageCtrl = TextEditingController();
-  final _scrollCtrl = ScrollController();
+  final _scrollCtrl  = ScrollController();
   List<ChatMessage> _messages = [];
   late Order _order;
   Lounge? _lounge;
-  Timer? _pollTimer;
+  StreamSubscription<QueryResult<Object?>>? _msgSub;
   bool _initialized = false;
 
   @override
@@ -36,28 +37,54 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
       _order = args['order'] as Order;
       _lounge = args['lounge'] as Lounge?;
-      _startPolling();
+
+      // Отметить заказ как прочитанный
+      final unread = context.read<UnreadState>();
+      unread.currentOrderId = _order.id;
+      unread.markRead(_order.id);
+
+      _fetchMessages();
+      _subscribeMessages();
     }
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    // Сбросить текущий открытый заказ
+    final unread = context.read<UnreadState>();
+    if (unread.currentOrderId == _order.id) {
+      unread.currentOrderId = null;
+    }
+    _msgSub?.cancel();
     _messageCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
-  void _startPolling() {
-    _fetchMessages();
-    _pollTimer =
-        Timer.periodic(const Duration(seconds: 5), (_) => _fetchMessages());
+  GraphQLClient get _client => GraphQLProvider.of(context).value;
+
+  void _subscribeMessages() {
+    final stream = _client.subscribe(SubscriptionOptions(
+      document: gql(GQLSubscriptions.messageCreatedForOrder(_order.id)),
+    ));
+    _msgSub = stream.listen((result) {
+      if (!mounted || result.data == null) return;
+      final raw = result.data!['messageCreated'] as Map<String, dynamic>?;
+      if (raw == null) return;
+      final msg = ChatMessage.fromJson(raw);
+      setState(() {
+        // Добавляем только если ещё нет такого id
+        if (!_messages.any((m) => m.id == msg.id)) {
+          _messages = [..._messages, msg];
+        }
+      });
+      _scrollToBottom();
+    });
   }
 
   Future<void> _fetchMessages() async {
     if (!mounted) return;
-    final client = GraphQLProvider.of(context).value;
-    final result = await client.query(QueryOptions(
+    final result = await _client.query(QueryOptions(
       document: gql(GQLQueries.messages(_order.id)),
       fetchPolicy: FetchPolicy.networkOnly,
     ));
@@ -189,13 +216,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       itemCount: _messages.length,
       itemBuilder: (ctx, i) {
         final msg  = _messages[i];
-        // сообщение моё, если роль явно 'user' ИЛИ senderId совпадает с телефоном
         final isMe = msg.senderRole == 'user' ||
             (phone.isNotEmpty && msg.senderId == phone);
 
-        const myBg    = Color(0xFF3D2800);   // тёмно-золотистый
-        const staffBg = Color(0xFF2E1F10);   // тёмно-коричневый
-        const myText  = Color(0xFFF5E6D0);   // кремовый
+        const myBg    = Color(0xFF3D2800);
+        const staffBg = Color(0xFF2E1F10);
+        const myText  = Color(0xFFF5E6D0);
 
         return Align(
           alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -280,8 +306,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (text.trim().isEmpty) return;
     _messageCtrl.clear();
     setState(() => _sending = true);
-    final client = GraphQLProvider.of(context).value;
-    final result = await client.mutate(MutationOptions(
+    final result = await _client.mutate(MutationOptions(
       document: gql(GQLMutations.sendMessage(_order.id, text.trim())),
     ));
     if (!mounted) return;

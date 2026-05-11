@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/chat/unread_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/graphql/subscriptions.dart';
 import '../../core/models/order.dart';
+import '../../core/notifications/notification_service.dart';
 import '../../widgets/status_badge.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -19,7 +21,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
   List<Order> _orders = [];
   bool _loading = false;
   String? _error;
-  StreamSubscription<QueryResult<Object?>>? _sub;
+  StreamSubscription<QueryResult<Object?>>? _statusSub;
+  StreamSubscription<QueryResult<Object?>>? _msgSub;
 
   bool _listenerAdded = false;
   late AuthState _auth;
@@ -42,7 +45,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   void dispose() {
     if (_listenerAdded) _auth.removeListener(_onAuthChanged);
-    _sub?.cancel();
+    _statusSub?.cancel();
+    _msgSub?.cancel();
     super.dispose();
   }
 
@@ -53,8 +57,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         if (mounted) { _fetch(); _subscribe(); }
       });
     } else {
-      _sub?.cancel();
-      _sub = null;
+      _statusSub?.cancel();
+      _statusSub = null;
+      _msgSub?.cancel();
+      _msgSub = null;
       setState(() { _orders = []; _error = null; _loading = false; });
     }
   }
@@ -86,12 +92,38 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   void _subscribe() {
-    final stream = _client.subscribe(SubscriptionOptions(
+    _statusSub?.cancel();
+    _msgSub?.cancel();
+
+    // Подписка на изменение статуса заказа
+    _statusSub = _client.subscribe(SubscriptionOptions(
       document: gql(GQLSubscriptions.orderStatusChanged),
-    ));
-    _sub = stream.listen((result) {
+    )).listen((result) {
       if (!mounted || result.data == null) return;
       _fetch();
+    });
+
+    // Глобальная подписка на новые сообщения от сотрудников
+    _msgSub = _client.subscribe(SubscriptionOptions(
+      document: gql(GQLSubscriptions.messageCreated),
+    )).listen((result) {
+      if (!mounted || result.data == null) return;
+      final msg = result.data!['messageCreated'] as Map<String, dynamic>?;
+      if (msg == null) return;
+
+      final senderRole = msg['senderRole'] as String? ?? '';
+      final orderId    = msg['orderId'] as String? ?? '';
+      final text       = msg['text'] as String? ?? '';
+
+      // Уведомления и бейджик только для сообщений от сотрудников
+      if (senderRole == 'staff' && orderId.isNotEmpty) {
+        final unread = context.read<UnreadState>();
+        unread.onNewStaffMessage(orderId);
+        // Показать пуш только если пользователь не в этом чате
+        if (unread.currentOrderId != orderId) {
+          NotificationService.showChatMessage(orderId: orderId, text: text);
+        }
+      }
     });
   }
 
@@ -152,10 +184,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             const SizedBox(height: 12),
             Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _fetch,
-              child: const Text('Повторить'),
-            ),
+            ElevatedButton(onPressed: _fetch, child: const Text('Повторить')),
           ],
         ),
       );
@@ -168,8 +197,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
           children: [
             Icon(Icons.receipt_long, size: 56, color: Colors.grey),
             SizedBox(height: 12),
-            Text('Заказов пока нет',
-                style: TextStyle(color: Colors.grey)),
+            Text('Заказов пока нет', style: TextStyle(color: Colors.grey)),
           ],
         ),
       );
@@ -215,6 +243,8 @@ class _OrderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final unreadCount = context.watch<UnreadState>().unreadFor(order.id);
+
     return ListTile(
       leading: ClipOval(
         child: Image.asset('assets/logo.png', width: 40, height: 40,
@@ -229,7 +259,29 @@ class _OrderTile extends StatelessWidget {
         ].join(' · '),
         style: const TextStyle(fontSize: 12),
       ),
-      trailing: StatusBadge(status: order.status),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (unreadCount > 0)
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFC9A84C),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$unreadCount',
+                style: const TextStyle(
+                  color: Color(0xFF1A0E05),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          StatusBadge(status: order.status),
+        ],
+      ),
       onTap: onTap,
     );
   }

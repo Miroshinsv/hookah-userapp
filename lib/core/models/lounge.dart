@@ -2,31 +2,38 @@ class StaffMember {
   final String id;
   final String firstName;
   final String lastName;
-  final String role;
+  final List<String> roles;
 
   const StaffMember({
     required this.id,
     required this.firstName,
     required this.lastName,
-    required this.role,
+    required this.roles,
   });
 
   factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
         id: json['id'] as String? ?? '',
         firstName: json['firstName'] as String? ?? '',
         lastName: json['lastName'] as String? ?? '',
-        role: json['role'] as String? ?? '',
+        roles: (json['roles'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            [],
       );
 
-  String get displayRole {
-    const map = {
-      'hookah_master': 'Кальянный мастер',
-      'hostess': 'Хостес',
-      'waiter': 'Официант',
-      'admin': 'Администратор',
-      'owner': 'Владелец',
-    };
-    return map[role] ?? role;
+  static const _roleLabels = {
+    'hookah_master': 'Кальянный мастер',
+    'hostess': 'Хостес',
+    'waiter': 'Официант',
+    'admin': 'Администратор',
+    'owner': 'Владелец',
+  };
+
+  // owner скрывается — пользователи не являются администраторами
+  String get displayRoles {
+    final visible = roles.where((r) => r != 'owner').toList();
+    if (visible.isEmpty) return '—';
+    return visible.map((r) => _roleLabels[r] ?? r).join(', ');
   }
 }
 

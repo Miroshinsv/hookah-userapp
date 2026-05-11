@@ -106,7 +106,7 @@ class LoungeDetailScreen extends StatelessWidget {
                     child: const Icon(Icons.person),
                   ),
                   title: Text('${s.firstName} ${s.lastName}'),
-                  subtitle: Text(s.displayRole),
+                  subtitle: Text(s.displayRoles),
                 ),
               ),
             ],

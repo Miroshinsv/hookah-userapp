@@ -55,10 +55,12 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _loginPhoneCtrl = TextEditingController();
-  final _loginPassCtrl  = TextEditingController();
-  final _regPhoneCtrl   = TextEditingController();
-  final _regPassCtrl    = TextEditingController();
+  final _loginPhoneCtrl    = TextEditingController();
+  final _loginPassCtrl     = TextEditingController();
+  final _regPhoneCtrl      = TextEditingController();
+  final _regPassCtrl       = TextEditingController();
+  final _regFirstNameCtrl  = TextEditingController();
+  final _regLastNameCtrl   = TextEditingController();
   String? _error;
   bool _loading = false;
 
@@ -83,6 +85,8 @@ class _AuthScreenState extends State<AuthScreen>
     _loginPassCtrl.dispose();
     _regPhoneCtrl.dispose();
     _regPassCtrl.dispose();
+    _regFirstNameCtrl.dispose();
+    _regLastNameCtrl.dispose();
     super.dispose();
   }
 
@@ -136,6 +140,8 @@ class _AuthScreenState extends State<AuthScreen>
       document: gql(GQLMutations.registerUser(
         _rawPhoneFrom(_regPhoneCtrl),
         _regPassCtrl.text,
+        firstName: _regFirstNameCtrl.text.trim().isEmpty ? null : _regFirstNameCtrl.text.trim(),
+        lastName: _regLastNameCtrl.text.trim().isEmpty ? null : _regLastNameCtrl.text.trim(),
       )),
     ));
     if (!mounted) return;
@@ -148,9 +154,14 @@ class _AuthScreenState extends State<AuthScreen>
       });
       return;
     }
-    final token = result.data?['registerUser']?['token'] as String?;
+    final regPayload = result.data?['registerUser'] as Map<String, dynamic>?;
+    final token = regPayload?['token'] as String?;
     if (token != null) {
-      await context.read<AuthState>().login(token);
+      await context.read<AuthState>().login(
+        token,
+        firstName: _regFirstNameCtrl.text.trim().isEmpty ? null : _regFirstNameCtrl.text.trim(),
+        lastName:  _regLastNameCtrl.text.trim().isEmpty ? null : _regLastNameCtrl.text.trim(),
+      );
       if (mounted && !widget.embedded) {
         Navigator.pushReplacementNamed(context, '/main');
       }
@@ -227,11 +238,29 @@ class _AuthScreenState extends State<AuthScreen>
           TextField(
             controller: _regPassCtrl,
             obscureText: true,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _loading ? null : _register(),
+            textInputAction: TextInputAction.next,
             decoration: const InputDecoration(
               labelText: 'Пароль',
               prefixIcon: Icon(Icons.lock_outline),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _regFirstNameCtrl,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Имя',
+              prefixIcon: Icon(Icons.person_outline),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _regLastNameCtrl,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _loading ? null : _register(),
+            decoration: const InputDecoration(
+              labelText: 'Фамилия',
+              prefixIcon: Icon(Icons.person_outline),
             ),
           ),
           if (_error != null && _tabController.index == 1) ...[

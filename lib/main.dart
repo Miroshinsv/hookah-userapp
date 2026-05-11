@@ -1,7 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/auth_state.dart';
+import 'core/chat/unread_state.dart';
+import 'core/notifications/notification_service.dart';
+import 'core/utils/logger.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/main_screen.dart';
@@ -114,7 +118,19 @@ ThemeData _buildTheme() {
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const App());
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    AppLogger.e('Flutter', details.exceptionAsString(), details.exception, details.stack);
+  };
+
+  runZonedGuarded(
+    () async {
+      await NotificationService.init();
+      runApp(const App());
+    },
+    (error, stack) => AppLogger.e('Zone', error.toString(), error, stack),
+  );
 }
 
 class App extends StatefulWidget {
@@ -126,11 +142,15 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   final AuthState _authState = AuthState();
+  final UnreadState _unreadState = UnreadState();
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: _authState,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: _authState),
+        ChangeNotifierProvider.value(value: _unreadState),
+      ],
       child: GraphQLProvider(
         client: _authState.gqlClient,
         child: MaterialApp(

@@ -15,10 +15,10 @@ class NewOrderScreen extends StatefulWidget {
 }
 
 class _NewOrderScreenState extends State<NewOrderScreen> {
-  final _formKey    = GlobalKey<FormState>();
-  final _flavorCtrl  = TextEditingController();
-  final _commentCtrl = TextEditingController();
-  final _phoneCtrl   = TextEditingController();
+  final _formKey       = GlobalKey<FormState>();
+  final _flavorCtrl    = TextEditingController();
+  final _commentCtrl   = TextEditingController();
+  final _phoneCtrl     = TextEditingController();
   DateTime? _arrivalAt;
   String?   _error;
   bool      _loading = false;
@@ -74,6 +74,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     }
     setState(() => _loading = true);
 
+    final auth = context.read<AuthState>();
     final client = GraphQLProvider.of(context).value;
     final result = await client.mutate(MutationOptions(
       document: gql(GQLMutations.createOrder(
@@ -81,6 +82,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         flavor:    _flavorCtrl.text.trim(),
         comment:   _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
         phone:     _phoneCtrl.text.trim(),
+        firstName: auth.firstName,
+        lastName:  auth.lastName,
         arrivalAt: _arrivalAt!.toUtc().toIso8601String(),
       )),
     ));
