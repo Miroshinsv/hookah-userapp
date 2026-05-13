@@ -223,16 +223,16 @@ jobs:
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          mv dist/android/app-release.apk           "hookah-admin-${TAG}.apk"
-          mv dist/android/app-release.aab           "hookah-admin-${TAG}.aab"
+          mv dist/android/app-release.apk           "hookah-user-${TAG}.apk"
+          mv dist/android/app-release.aab           "hookah-user-${TAG}.aab"
 
       - name: Опубликовать GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
-          name: "Hookah Admin ${{ needs.prepare.outputs.tag }}"
+          name: "Hookah User App ${{ needs.prepare.outputs.tag }}"
           body_path: dist/release_body.md
           prerelease: ${{ inputs.prerelease }}
           files: |
-            hookah-admin-${{ needs.prepare.outputs.tag }}.apk
-            hookah-admin-${{ needs.prepare.outputs.tag }}.aab
+            hookah-user-${{ needs.prepare.outputs.tag }}.apk
+            hookah-user-${{ needs.prepare.outputs.tag }}.aab
