@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/utils/schedule_parser.dart';
 
@@ -97,18 +99,7 @@ class LoungeDetailScreen extends StatelessWidget {
               const Text('Персонал',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              ...lounge.staff.map(
-                (s) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.secondaryContainer,
-                    child: const Icon(Icons.person),
-                  ),
-                  title: Text('${s.firstName} ${s.lastName}'),
-                  subtitle: Text(s.displayRoles),
-                ),
-              ),
+              ...lounge.staff.map((s) => _StaffTile(staff: s)),
             ],
             const SizedBox(height: 32),
             _OrderButton(lounge: lounge),
@@ -180,6 +171,123 @@ class _OrderButton extends StatelessWidget {
             child: const Text('Войти'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StaffTile extends StatefulWidget {
+  final StaffMember staff;
+  const _StaffTile({required this.staff});
+
+  @override
+  State<_StaffTile> createState() => _StaffTileState();
+}
+
+class _StaffTileState extends State<_StaffTile> {
+  Map<String, String>? _schedule;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fetchSchedule());
+  }
+
+  Future<void> _fetchSchedule() async {
+    final client = GraphQLProvider.of(context).value;
+    final result = await client.query(QueryOptions(
+      document: gql(GQLQueries.staffSchedule(widget.staff.id)),
+      fetchPolicy: FetchPolicy.cacheFirst,
+    ));
+    if (!mounted) return;
+    final list = result.data?['staffSchedule'] as List<Object?>?;
+    final data = (list != null && list.isNotEmpty) ? list.first as Map<String, dynamic>? : null;
+    setState(() {
+      _loading = false;
+      if (data != null) {
+        _schedule = ScheduleParser.parse(data['schedule'] as String?);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: CircleAvatar(
+              backgroundColor:
+                  Theme.of(context).colorScheme.secondaryContainer,
+              child: const Icon(Icons.person),
+            ),
+            title: Text('${widget.staff.firstName} ${widget.staff.lastName}'),
+            subtitle: Text(widget.staff.displayRoles),
+          ),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.only(left: 56, bottom: 8),
+              child: SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (_schedule != null && _schedule!.isNotEmpty)
+            _ScheduleChips(schedule: _schedule!),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleChips extends StatelessWidget {
+  final Map<String, String> schedule;
+  const _ScheduleChips({required this.schedule});
+
+  static const _allDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(left: 56, bottom: 12),
+      child: Row(
+        children: _allDays.map((day) {
+          final isWorking = schedule.containsKey(day);
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Tooltip(
+              message: isWorking ? schedule[day]! : 'Не работает',
+              child: Container(
+                width: 32,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isWorking
+                      ? cs.primaryContainer
+                      : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  day,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight:
+                        isWorking ? FontWeight.bold : FontWeight.normal,
+                    color: isWorking
+                        ? cs.onPrimaryContainer
+                        : Colors.grey.shade400,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

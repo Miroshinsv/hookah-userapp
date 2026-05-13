@@ -64,4 +64,14 @@ class GQLQueries {
       }
     }
   ''';
+
+  static String staffSchedule(String staffId) => '''
+    query {
+      staffSchedule(staffId: ${jsonEncode(staffId)}) {
+        staffId
+        loungeId
+        schedule
+      }
+    }
+  ''';
 }
