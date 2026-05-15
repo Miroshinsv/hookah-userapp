@@ -251,6 +251,7 @@ class _LoungeBottomSheet extends StatelessWidget {
     final isOpen = ScheduleParser.isOpenNow(lounge.schedule);
     final todayHours = ScheduleParser.todayHours(lounge.schedule);
     final isLoggedIn = context.watch<AuthState>().isLoggedIn;
+    final hasOwner = lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -338,21 +339,38 @@ class _LoungeBottomSheet extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: isLoggedIn
-                      ? () {
-                          Navigator.pop(context);
-                          Navigator.pushNamed(context, '/order/new',
-                              arguments: lounge);
-                        }
-                      : () => _promptLogin(context),
+                  onPressed: hasOwner
+                      ? isLoggedIn
+                          ? () {
+                              Navigator.pop(context);
+                              Navigator.pushNamed(context, '/order/new',
+                                  arguments: lounge);
+                            }
+                          : () => _promptLogin(context)
+                      : null,
                   child: const Text('Сделать заказ'),
                 ),
               ),
             ],
           ),
 
-          // Подсказка если не авторизован
-          if (!isLoggedIn)
+          // Подсказка
+          if (!hasOwner)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.block, size: 13, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Заведение не подключено',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            )
+          else if (!isLoggedIn)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Row(
@@ -362,8 +380,7 @@ class _LoungeBottomSheet extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                     'Для заказа необходима авторизация',
-                    style:
-                        TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ),

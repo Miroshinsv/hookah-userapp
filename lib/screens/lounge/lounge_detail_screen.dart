@@ -118,21 +118,39 @@ class _OrderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isLoggedIn = context.watch<AuthState>().isLoggedIn;
+    final hasOwner = lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ElevatedButton.icon(
-          onPressed: isLoggedIn
-              ? () => Navigator.pushNamed(context, '/order/new', arguments: lounge)
-              : () => _promptLogin(context),
+          onPressed: hasOwner
+              ? isLoggedIn
+                  ? () => Navigator.pushNamed(context, '/order/new', arguments: lounge)
+                  : () => _promptLogin(context)
+              : null,
           icon: const Icon(Icons.add_shopping_cart),
           label: const Text('Сделать заказ'),
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
         ),
-        if (!isLoggedIn)
+        if (!hasOwner)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.block, size: 14, color: Colors.grey),
+                const SizedBox(width: 4),
+                Text(
+                  'Заведение не подключено',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          )
+        else if (!isLoggedIn)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Row(
