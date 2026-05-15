@@ -18,6 +18,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _index = 0;
+  final _ordersKey = GlobalKey<OrdersScreenState>();
 
   @override
   void initState() {
@@ -39,7 +40,7 @@ class _MainScreenState extends State<MainScreen> {
 
     final tabs = <Widget>[
       const MapScreen(),
-      const OrdersScreen(),
+      OrdersScreen(key: _ordersKey),
       auth.isLoggedIn
           ? const ProfileScreen()
           : const AuthScreen(embedded: true),
@@ -49,7 +50,10 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(index: _index, children: tabs),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: (i) {
+          if (i == 1) _ordersKey.currentState?.refresh();
+          setState(() => _index = i);
+        },
         destinations: [
           const NavigationDestination(
             icon: Icon(Icons.map_outlined),

@@ -14,18 +14,21 @@ class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
   @override
-  State<OrdersScreen> createState() => _OrdersScreenState();
+  State<OrdersScreen> createState() => OrdersScreenState();
 }
 
-class _OrdersScreenState extends State<OrdersScreen> {
+class OrdersScreenState extends State<OrdersScreen> {
   List<Order> _orders = [];
   bool _loading = false;
   String? _error;
+  bool _showCompleted = false;
   StreamSubscription<QueryResult<Object?>>? _statusSub;
   StreamSubscription<QueryResult<Object?>>? _msgSub;
 
   bool _listenerAdded = false;
   late AuthState _auth;
+
+  void refresh() => _fetch();
 
   @override
   void didChangeDependencies() {
@@ -170,6 +173,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
+  static const _doneStatuses = {'completed', 'canceled'};
+
+  List<Order> get _visible => _showCompleted
+      ? _orders
+      : _orders.where((o) => !_doneStatuses.contains(o.status)).toList();
+
   Widget _buildBody() {
     if (_loading && _orders.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -190,35 +199,76 @@ class _OrdersScreenState extends State<OrdersScreen> {
       );
     }
 
-    if (_orders.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.receipt_long, size: 56, color: Colors.grey),
-            SizedBox(height: 12),
-            Text('Заказов пока нет', style: TextStyle(color: Colors.grey)),
-          ],
-        ),
-      );
-    }
+    final visible = _visible;
 
-    return RefreshIndicator(
-      onRefresh: _fetch,
-      child: ListView.separated(
-        itemCount: _orders.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (ctx, i) {
-          final o = _orders[i];
-          return _OrderTile(
-            order: o,
-            onTap: () async {
-              await Navigator.pushNamed(ctx, '/order',
-                  arguments: {'order': o});
-              _fetch();
-            },
-          );
-        },
+    return Column(
+      children: [
+        _buildFilter(),
+        Expanded(
+          child: visible.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.receipt_long, size: 56, color: Colors.grey),
+                      const SizedBox(height: 12),
+                      Text(
+                        _orders.isEmpty
+                            ? 'Заказов пока нет'
+                            : 'Нет активных заказов',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _fetch,
+                  child: ListView.separated(
+                    itemCount: visible.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (ctx, i) {
+                      final o = visible[i];
+                      return _OrderTile(
+                        order: o,
+                        onTap: () async {
+                          await Navigator.pushNamed(ctx, '/order',
+                              arguments: {'order': o});
+                          _fetch();
+                        },
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilter() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color: Theme.of(context).dividerColor,
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Завершённые заказы',
+              style: TextStyle(fontSize: 13),
+            ),
+          ),
+          Switch(
+            value: _showCompleted,
+            onChanged: (v) => setState(() => _showCompleted = v),
+          ),
+        ],
       ),
     );
   }
