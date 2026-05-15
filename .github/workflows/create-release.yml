@@ -223,6 +223,7 @@ jobs:
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
+          cp dist/android/app-release.apk           "hookah-user-latest.apk"
           mv dist/android/app-release.apk           "hookah-user-${TAG}.apk"
           mv dist/android/app-release.aab           "hookah-user-${TAG}.aab"
 
@@ -236,3 +237,4 @@ jobs:
           files: |
             hookah-user-${{ needs.prepare.outputs.tag }}.apk
             hookah-user-${{ needs.prepare.outputs.tag }}.aab
+            hookah-user-latest.apk

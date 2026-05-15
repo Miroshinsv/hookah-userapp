@@ -26,6 +26,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late Order _order;
   Lounge? _lounge;
   StreamSubscription<QueryResult<Object?>>? _msgSub;
+  Timer? _pollingTimer;
   bool _initialized = false;
 
   @override
@@ -43,8 +44,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       unread.currentOrderId = _order.id;
       unread.markRead(_order.id);
 
-      _fetchMessages();
+      _fetchMessages(scroll: true);
       _subscribeMessages();
+      _pollingTimer = Timer.periodic(
+        const Duration(seconds: 4),
+        (_) => _fetchMessages(),
+      );
     }
   }
 
@@ -56,6 +61,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       unread.currentOrderId = null;
     }
     _msgSub?.cancel();
+    _pollingTimer?.cancel();
     _messageCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -82,7 +88,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     });
   }
 
-  Future<void> _fetchMessages() async {
+  Future<void> _fetchMessages({bool scroll = false}) async {
     if (!mounted) return;
     final result = await _client.query(QueryOptions(
       document: gql(GQLQueries.messages(_order.id)),
@@ -90,12 +96,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     ));
     if (!mounted || result.data == null) return;
     final raw = result.data!['messages'] as List<dynamic>? ?? [];
-    setState(() {
-      _messages = raw
-          .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
-          .toList();
-    });
-    _scrollToBottom();
+    final fetched = raw
+        .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final hasNew = fetched.length > _messages.length;
+    setState(() => _messages = fetched);
+    if (scroll || hasNew) _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -311,6 +317,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     ));
     if (!mounted) return;
     setState(() => _sending = false);
-    if (!result.hasException) _fetchMessages();
+    if (!result.hasException) _fetchMessages(scroll: true);
   }
 }
