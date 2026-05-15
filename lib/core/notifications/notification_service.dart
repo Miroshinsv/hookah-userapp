@@ -1,10 +1,13 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../utils/logger.dart';
+import '../utils/status_helper.dart';
 
 class NotificationService {
   static const _tag = 'Notify';
   static const _channelId = 'chat_messages';
   static const _channelName = 'Сообщения в чате';
+  static const _statusChannelId = 'order_status';
+  static const _statusChannelName = 'Статус заказа';
 
   static final _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
@@ -50,6 +53,35 @@ class NotificationService {
       );
     } catch (e) {
       AppLogger.w(_tag, 'show failed', e);
+    }
+  }
+
+  static Future<void> showStatusChanged({
+    required String orderId,
+    required String newStatus,
+  }) async {
+    if (!_initialized) return;
+    try {
+      const androidDetails = AndroidNotificationDetails(
+        _statusChannelId,
+        _statusChannelName,
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+      );
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: DarwinNotificationDetails(),
+      );
+      final label = StatusHelper.localize(newStatus);
+      await _plugin.show(
+        ('status_$orderId').hashCode,
+        'Статус заказа изменён',
+        'Заказ #$orderId: $label',
+        details,
+      );
+    } catch (e) {
+      AppLogger.w(_tag, 'showStatusChanged failed', e);
     }
   }
 }

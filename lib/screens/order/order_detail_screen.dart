@@ -28,6 +28,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   StreamSubscription<QueryResult<Object?>>? _msgSub;
   Timer? _pollingTimer;
   bool _initialized = false;
+  int _newInSession = 0;   // новые сообщения от сотрудника, пока прокручено вверх
+  bool _isAtBottom  = true;
 
   @override
   void didChangeDependencies() {
@@ -44,6 +46,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       unread.currentOrderId = _order.id;
       unread.markRead(_order.id);
 
+      _scrollCtrl.addListener(_onScroll);
       _fetchMessages(scroll: true);
       _subscribeMessages();
       _pollingTimer = Timer.periodic(
@@ -51,6 +54,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         (_) => _fetchMessages(),
       );
     }
+  }
+
+  void _onScroll() {
+    if (!_scrollCtrl.hasClients) return;
+    final pos = _scrollCtrl.position;
+    final atBottom = pos.pixels >= pos.maxScrollExtent - 60;
+    if (atBottom && _newInSession > 0) setState(() => _newInSession = 0);
+    if (atBottom != _isAtBottom) setState(() => _isAtBottom = atBottom);
   }
 
   @override
@@ -78,13 +89,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final raw = result.data!['messageCreated'] as Map<String, dynamic>?;
       if (raw == null) return;
       final msg = ChatMessage.fromJson(raw);
+      final isNew = !_messages.any((m) => m.id == msg.id);
+      if (!isNew) return;
+      final isStaff = msg.senderRole != 'user';
       setState(() {
-        // Добавляем только если ещё нет такого id
-        if (!_messages.any((m) => m.id == msg.id)) {
-          _messages = [..._messages, msg];
-        }
+        _messages = [..._messages, msg];
+        if (isStaff && !_isAtBottom) _newInSession++;
       });
-      _scrollToBottom();
+      if (!isStaff || _isAtBottom) _scrollToBottom();
     });
   }
 
@@ -101,7 +113,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         .toList();
     final hasNew = fetched.length > _messages.length;
     setState(() => _messages = fetched);
-    if (scroll || hasNew) _scrollToBottom();
+    if (scroll || (hasNew && _isAtBottom)) _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -144,7 +156,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
           ),
-          Expanded(child: _buildChat()),
+          Expanded(child: _buildChatWithBadge()),
           _buildInput(),
         ],
       ),
@@ -203,6 +215,58 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildChatWithBadge() {
+    return Stack(
+      children: [
+        _buildChat(),
+        if (_newInSession > 0)
+          Positioned(
+            bottom: 8,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _newInSession = 0);
+                  _scrollToBottom();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC9A84C),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(
+                          color: Colors.black38,
+                          blurRadius: 6,
+                          offset: Offset(0, 2))
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.arrow_downward,
+                          size: 14, color: Color(0xFF1A0E05)),
+                      const SizedBox(width: 5),
+                      Text(
+                        '$_newInSession новых',
+                        style: const TextStyle(
+                          color: Color(0xFF1A0E05),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

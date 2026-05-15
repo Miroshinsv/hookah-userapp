@@ -103,6 +103,15 @@ class OrdersScreenState extends State<OrdersScreen> {
       document: gql(GQLSubscriptions.orderStatusChanged),
     )).listen((result) {
       if (!mounted || result.data == null) return;
+      final changed =
+          result.data!['orderStatusChanged'] as Map<String, dynamic>?;
+      if (changed != null) {
+        final id     = changed['id']     as String? ?? '';
+        final status = changed['status'] as String? ?? '';
+        if (id.isNotEmpty && status.isNotEmpty) {
+          NotificationService.showStatusChanged(orderId: id, newStatus: status);
+        }
+      }
       _fetch();
     });
 
