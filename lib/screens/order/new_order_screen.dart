@@ -193,7 +193,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _loading ? null : () => _submit(lounge),
+                  onPressed: _loading || (lounge.ownerUserId == null || lounge.ownerUserId!.isEmpty)
+                      ? null
+                      : () => _submit(lounge),
                   child: _loading
                       ? const SizedBox(height: 20, width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2))

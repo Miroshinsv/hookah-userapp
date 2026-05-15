@@ -25,6 +25,7 @@ class GQLQueries {
         phone
         latitude
         longitude
+        ownerUserId
         staff {
           id
           firstName

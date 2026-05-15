@@ -48,6 +48,7 @@ class Lounge {
   final double latitude;
   final double longitude;
   final List<StaffMember> staff;
+  final String? ownerUserId;
 
   const Lounge({
     required this.id,
@@ -60,6 +61,7 @@ class Lounge {
     required this.latitude,
     required this.longitude,
     this.staff = const [],
+    this.ownerUserId,
   });
 
   factory Lounge.fromJson(Map<String, dynamic> json) => Lounge(
@@ -76,5 +78,6 @@ class Lounge {
                 ?.map((s) => StaffMember.fromJson(s as Map<String, dynamic>))
                 .toList() ??
             [],
+        ownerUserId: json['ownerUserId'] as String?,
       );
 }
