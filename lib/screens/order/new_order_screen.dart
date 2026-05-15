@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
@@ -15,30 +14,17 @@ class NewOrderScreen extends StatefulWidget {
 }
 
 class _NewOrderScreenState extends State<NewOrderScreen> {
-  final _formKey       = GlobalKey<FormState>();
-  final _flavorCtrl    = TextEditingController();
-  final _commentCtrl   = TextEditingController();
-  final _phoneCtrl     = TextEditingController();
+  final _formKey    = GlobalKey<FormState>();
+  final _flavorCtrl = TextEditingController();
+  final _commentCtrl = TextEditingController();
   DateTime? _arrivalAt;
   String?   _error;
   bool      _loading = false;
-  bool      _initialized = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_initialized) {
-      _initialized = true;
-      final phone = context.read<AuthState>().phone;
-      if (phone != null) _phoneCtrl.text = phone;
-    }
-  }
 
   @override
   void dispose() {
     _flavorCtrl.dispose();
     _commentCtrl.dispose();
-    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -81,7 +67,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         loungeId:  lounge.id,
         flavor:    _flavorCtrl.text.trim(),
         comment:   _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
-        phone:     _phoneCtrl.text.trim(),
+        phone:     auth.phone ?? '',
         firstName: auth.firstName,
         lastName:  auth.lastName,
         arrivalAt: _arrivalAt!.toUtc().toIso8601String(),
@@ -100,12 +86,13 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
     final orderData = result.data?['createOrder'] as Map<String, dynamic>?;
     if (orderData != null) {
+      final auth = context.read<AuthState>();
       final order = Order.fromJson({
         ...orderData,
         'loungeId':  lounge.id,
         'flavor':    _flavorCtrl.text,
         'comment':   _commentCtrl.text,
-        'phone':     _phoneCtrl.text,
+        'phone':     auth.phone ?? '',
         'arrivalAt': _arrivalAt?.toUtc().toIso8601String(),
       });
       Navigator.pushReplacementNamed(context, '/order',
@@ -153,18 +140,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                   prefixIcon: Icon(Icons.comment_outlined),
                 ),
                 maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.next,
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\+\-\(\) ]'))],
-                decoration: const InputDecoration(
-                  labelText: 'Телефон *',
-                  prefixIcon: Icon(Icons.phone),
-                ),
-                validator: (v) => v == null || v.isEmpty ? 'Укажите телефон' : null,
               ),
               const SizedBox(height: 16),
               InkWell(
