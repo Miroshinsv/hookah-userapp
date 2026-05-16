@@ -168,8 +168,10 @@ class AuthState extends ChangeNotifier {
     final link = Link.split(
       (request) => request.isSubscription,
       wsLink,
-      LoggingLink(onUnauthenticated: onUnauthenticated)
-          .concat(authLink.concat(httpLink)),
+      LoggingLink(
+        onUnauthenticated: onUnauthenticated,
+        getToken: token != null ? () => token : null,
+      ).concat(authLink.concat(httpLink)),
     );
     return GraphQLClient(
       link: link,

@@ -1,16 +1,25 @@
 import 'package:flutter/foundation.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import '../utils/jwt_helper.dart';
 import '../utils/logger.dart';
 
 class LoggingLink extends Link {
   static const _tag = 'GQL';
 
   final VoidCallback? onUnauthenticated;
+  final String? Function()? getToken;
 
-  LoggingLink({this.onUnauthenticated});
+  LoggingLink({this.onUnauthenticated, this.getToken});
 
   @override
   Stream<Response> request(Request request, [NextLink? forward]) {
+    final token = getToken?.call();
+    if (token != null && JwtHelper.isExpired(token)) {
+      AppLogger.w(_tag, 'token expired before request — logging out');
+      onUnauthenticated?.call();
+      return const Stream.empty();
+    }
+
     final op = request.operation.operationName ??
         _extractOperationName(request.operation.document.toString()) ??
         'anonymous';

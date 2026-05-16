@@ -7,6 +7,7 @@ class StatusHelper {
       'in_progress': 'Готовится',
       'completed': 'Завершён',
       'canceled': 'Отменён',
+      'canceled_by_staff': 'Отменён заведением',
     };
     return map[status] ?? status;
   }
@@ -20,6 +21,7 @@ class StatusHelper {
       case 'completed':
         return Colors.green;
       case 'canceled':
+      case 'canceled_by_staff':
         return Colors.red;
       default:
         return Colors.grey;

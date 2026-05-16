@@ -182,7 +182,7 @@ class OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  static const _doneStatuses = {'completed', 'canceled'};
+  static const _doneStatuses = {'completed', 'canceled', 'canceled_by_staff'};
 
   List<Order> get _visible => _showCompleted
       ? _orders
