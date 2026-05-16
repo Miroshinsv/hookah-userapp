@@ -30,21 +30,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _initialized = false;
   int _newInSession = 0;   // новые сообщения от сотрудника, пока прокручено вверх
   bool _isAtBottom  = true;
+  late GraphQLClient _graphqlClient;
+  late UnreadState _unreadState;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
+      _graphqlClient = GraphQLProvider.of(context).value;
+      _unreadState   = context.read<UnreadState>();
+
       final args =
           ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
       _order = args['order'] as Order;
       _lounge = args['lounge'] as Lounge?;
 
-      // Отметить заказ как прочитанный
-      final unread = context.read<UnreadState>();
-      unread.currentOrderId = _order.id;
-      unread.markRead(_order.id);
+      _unreadState.currentOrderId = _order.id;
+      _unreadState.markRead(_order.id);
 
       _scrollCtrl.addListener(_onScroll);
       _fetchMessages(scroll: true);
@@ -66,10 +69,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   void dispose() {
-    // Сбросить текущий открытый заказ
-    final unread = context.read<UnreadState>();
-    if (unread.currentOrderId == _order.id) {
-      unread.currentOrderId = null;
+    if (_unreadState.currentOrderId == _order.id) {
+      _unreadState.currentOrderId = null;
     }
     _msgSub?.cancel();
     _pollingTimer?.cancel();
@@ -78,10 +79,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     super.dispose();
   }
 
-  GraphQLClient get _client => GraphQLProvider.of(context).value;
-
   void _subscribeMessages() {
-    final stream = _client.subscribe(SubscriptionOptions(
+    final stream = _graphqlClient.subscribe(SubscriptionOptions(
       document: gql(GQLSubscriptions.messageCreatedForOrder(_order.id)),
     ));
     _msgSub = stream.listen((result) {
@@ -102,7 +101,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _fetchMessages({bool scroll = false}) async {
     if (!mounted) return;
-    final result = await _client.query(QueryOptions(
+    final result = await _graphqlClient.query(QueryOptions(
       document: gql(GQLQueries.messages(_order.id)),
       fetchPolicy: FetchPolicy.networkOnly,
     ));
@@ -376,7 +375,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (text.trim().isEmpty) return;
     _messageCtrl.clear();
     setState(() => _sending = true);
-    final result = await _client.mutate(MutationOptions(
+    final result = await _graphqlClient.mutate(MutationOptions(
       document: gql(GQLMutations.sendMessage(_order.id, text.trim())),
     ));
     if (!mounted) return;

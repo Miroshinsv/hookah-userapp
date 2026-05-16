@@ -13,6 +13,21 @@ class NewOrderScreen extends StatefulWidget {
   State<NewOrderScreen> createState() => _NewOrderScreenState();
 }
 
+class _QuickTimeChip extends StatelessWidget {
+  const _QuickTimeChip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      label: Text(label),
+      avatar: const Icon(Icons.timer_outlined, size: 16),
+      onPressed: onTap,
+    );
+  }
+}
+
 class _NewOrderScreenState extends State<NewOrderScreen> {
   final _formKey    = GlobalKey<FormState>();
   final _flavorCtrl = TextEditingController();
@@ -28,6 +43,13 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     super.dispose();
   }
 
+  void _setArrivalIn(int minutes) {
+    setState(() {
+      _arrivalAt = DateTime.now().add(Duration(minutes: minutes));
+      _error = null;
+    });
+  }
+
   Future<void> _pickDateTime() async {
     final now = DateTime.now();
     final date = await showDatePicker(
@@ -41,9 +63,17 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(now),
     );
-    if (time == null) return;
+    if (time == null || !mounted) return;
+    final picked = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    if (picked.isBefore(now)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нельзя выбрать прошедшее время')),
+      );
+      return;
+    }
     setState(() {
-      _arrivalAt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _arrivalAt = picked;
+      _error = null;
     });
   }
 
@@ -159,6 +189,16 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     ),
                   ),
                 ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _QuickTimeChip(label: '30 мин', onTap: () => _setArrivalIn(30)),
+                  const SizedBox(width: 8),
+                  _QuickTimeChip(label: '45 мин', onTap: () => _setArrivalIn(45)),
+                  const SizedBox(width: 8),
+                  _QuickTimeChip(label: '1 час',  onTap: () => _setArrivalIn(60)),
+                ],
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
