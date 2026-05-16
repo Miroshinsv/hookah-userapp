@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/auth_state.dart';
 import 'core/chat/unread_state.dart';
 import 'core/notifications/notification_service.dart';
+import 'core/utils/analytics.dart';
 import 'core/utils/logger.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/auth_screen.dart';
@@ -117,15 +119,16 @@ ThemeData _buildTheme() {
 }
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  FlutterError.onError = (details) {
-    FlutterError.presentError(details);
-    AppLogger.e('Flutter', details.exceptionAsString(), details.exception, details.stack);
-  };
-
   runZonedGuarded(
     () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      FlutterError.onError = (details) {
+        FlutterError.presentError(details);
+        AppLogger.e('Flutter', details.exceptionAsString(), details.exception, details.stack);
+      };
+
+      await Firebase.initializeApp();
       await NotificationService.init();
       runApp(const App());
     },
@@ -157,6 +160,7 @@ class _AppState extends State<App> {
           title: 'Hookah Order',
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(),
+          navigatorObservers: [Analytics.observer],
           initialRoute: '/',
           routes: {
             '/': (_) => const SplashScreen(),
