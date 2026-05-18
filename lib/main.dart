@@ -12,6 +12,7 @@ import 'screens/splash_screen.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/lounge/lounge_detail_screen.dart';
+import 'screens/lounge/lounge_chat_screen.dart';
 import 'screens/order/new_order_screen.dart';
 import 'screens/order/order_detail_screen.dart';
 
@@ -167,6 +168,7 @@ class _AppState extends State<App> {
             '/auth': (_) => const AuthScreen(),
             '/main': (_) => const MainScreen(),
             '/lounge': (_) => const LoungeDetailScreen(),
+            '/lounge/chat': (_) => const LoungeChatScreen(),
             '/order/new': (_) => const NewOrderScreen(),
             '/order': (_) => const OrderDetailScreen(),
           },

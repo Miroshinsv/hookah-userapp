@@ -5,6 +5,7 @@ import '../../core/auth/auth_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/utils/schedule_parser.dart';
+import '../../widgets/lounge_photo_gallery.dart';
 
 class LoungeDetailScreen extends StatelessWidget {
   const LoungeDetailScreen({super.key});
@@ -17,95 +18,129 @@ class LoungeDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(lounge.name)),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    lounge.name,
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                if (lounge.rating != null)
-                  Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 20),
-                      const SizedBox(width: 4),
-                      Text(
-                        lounge.rating!.toStringAsFixed(1),
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-              ],
+            if (lounge.photos.isNotEmpty)
+              LoungePhotoGallery(photos: lounge.photos),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [_LoungeInfo(lounge: lounge, schedule: schedule)],
+              ),
             ),
-            if (lounge.shortAddress != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.location_on, color: Colors.grey, size: 16),
-                  const SizedBox(width: 4),
-                  Text(lounge.shortAddress!,
-                      style: const TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ],
-            if (lounge.phone != null) ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  const Icon(Icons.phone, color: Colors.grey, size: 16),
-                  const SizedBox(width: 4),
-                  Text(lounge.phone!,
-                      style: const TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ],
-            if (lounge.description != null &&
-                lounge.description!.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(lounge.description!),
-            ],
-            if (schedule.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              const Text('Расписание',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              ...schedule.entries.map(
-                (e) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 36,
-                        child: Text(e.key,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600)),
-                      ),
-                      Text(e.value),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-            if (lounge.staff.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              const Text('Персонал',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              ...lounge.staff.map((s) => _StaffTile(staff: s)),
-            ],
-            const SizedBox(height: 32),
-            _OrderButton(lounge: lounge),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LoungeInfo extends StatelessWidget {
+  final Lounge lounge;
+  final Map<String, String> schedule;
+
+  const _LoungeInfo({required this.lounge, required this.schedule});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                lounge.name,
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+            ),
+            if (lounge.rating != null)
+              Row(
+                children: [
+                  const Icon(Icons.star, color: Colors.amber, size: 20),
+                  const SizedBox(width: 4),
+                  Text(
+                    lounge.rating!.toStringAsFixed(1),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        if (lounge.shortAddress != null) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(Icons.location_on, color: Colors.grey, size: 16),
+              const SizedBox(width: 4),
+              Text(lounge.shortAddress!,
+                  style: const TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ],
+        if (lounge.phone != null) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.phone, color: Colors.grey, size: 16),
+              const SizedBox(width: 4),
+              Text(lounge.phone!,
+                  style: const TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ],
+        if (lounge.description != null && lounge.description!.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(lounge.description!),
+        ],
+        if (schedule.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const Text('Расписание',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          ...schedule.entries.map(
+            (e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 36,
+                    child: Text(e.key,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  Text(e.value),
+                ],
+              ),
+            ),
+          ),
+        ],
+        if (lounge.staff.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const Text('Персонал',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ...lounge.staff.map((s) => _StaffTile(staff: s)),
+        ],
+        const SizedBox(height: 24),
+        if (lounge.chatEnabled) ...[
+          OutlinedButton.icon(
+            onPressed: () =>
+                Navigator.pushNamed(context, '/lounge/chat', arguments: lounge),
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: const Text('Написать в чат заведения'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        _OrderButton(lounge: lounge),
+      ],
     );
   }
 }
@@ -241,7 +276,12 @@ class _StaffTileState extends State<_StaffTile> {
             leading: CircleAvatar(
               backgroundColor:
                   Theme.of(context).colorScheme.secondaryContainer,
-              child: const Icon(Icons.person),
+              backgroundImage: widget.staff.photoUrl != null
+                  ? NetworkImage(widget.staff.photoUrl!)
+                  : null,
+              child: widget.staff.photoUrl == null
+                  ? const Icon(Icons.person)
+                  : null,
             ),
             title: Text('${widget.staff.firstName} ${widget.staff.lastName}'),
             subtitle: Text(widget.staff.displayRoles),

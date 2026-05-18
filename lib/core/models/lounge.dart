@@ -1,14 +1,28 @@
+class LoungePhoto {
+  final String id;
+  final String url;
+
+  const LoungePhoto({required this.id, required this.url});
+
+  factory LoungePhoto.fromJson(Map<String, dynamic> json) => LoungePhoto(
+        id: json['id'] as String? ?? '',
+        url: json['url'] as String? ?? '',
+      );
+}
+
 class StaffMember {
   final String id;
   final String firstName;
   final String lastName;
   final List<String> roles;
+  final String? photoUrl;
 
   const StaffMember({
     required this.id,
     required this.firstName,
     required this.lastName,
     required this.roles,
+    this.photoUrl,
   });
 
   factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
@@ -19,6 +33,7 @@ class StaffMember {
                 ?.map((e) => e as String)
                 .toList() ??
             [],
+        photoUrl: json['photoUrl'] as String?,
       );
 
   static const _roleLabels = {
@@ -49,6 +64,9 @@ class Lounge {
   final double longitude;
   final List<StaffMember> staff;
   final String? ownerUserId;
+  final bool chatEnabled;
+  final bool mediaEnabled;
+  final List<LoungePhoto> photos;
 
   const Lounge({
     required this.id,
@@ -62,6 +80,9 @@ class Lounge {
     required this.longitude,
     this.staff = const [],
     this.ownerUserId,
+    this.chatEnabled = false,
+    this.mediaEnabled = false,
+    this.photos = const [],
   });
 
   factory Lounge.fromJson(Map<String, dynamic> json) => Lounge(
@@ -79,5 +100,11 @@ class Lounge {
                 .toList() ??
             [],
         ownerUserId: json['ownerUserId'] as String?,
+        chatEnabled: json['chatEnabled'] as bool? ?? false,
+        mediaEnabled: json['mediaEnabled'] as bool? ?? false,
+        photos: (json['photos'] as List<dynamic>?)
+                ?.map((p) => LoungePhoto.fromJson(p as Map<String, dynamic>))
+                .toList() ??
+            [],
       );
 }

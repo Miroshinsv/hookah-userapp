@@ -26,11 +26,18 @@ class GQLQueries {
         latitude
         longitude
         ownerUserId
+        chatEnabled
+        mediaEnabled
+        photos {
+          id
+          url
+        }
         staff {
           id
           firstName
           lastName
           roles
+          photoUrl
         }
       }
     }
@@ -72,6 +79,19 @@ class GQLQueries {
         staffId
         loungeId
         schedule
+      }
+    }
+  ''';
+
+  static String loungeChatMessages(String loungeId, {int limit = 100}) => '''
+    query {
+      loungeChatMessages(loungeId: ${jsonEncode(loungeId)}, limit: $limit) {
+        messageId
+        loungeId
+        senderId
+        senderRole
+        text
+        createdAt
       }
     }
   ''';

@@ -80,4 +80,13 @@ class GQLMutations {
       }
     }
   ''';
+
+  static String sendLoungeChatMessage(String loungeId, String text) => '''
+    mutation {
+      sendLoungeChatMessage(loungeId: ${jsonEncode(loungeId)}, text: ${jsonEncode(text)}) {
+        messageId
+        createdAt
+      }
+    }
+  ''';
 }

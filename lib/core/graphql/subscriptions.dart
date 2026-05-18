@@ -36,4 +36,17 @@ class GQLSubscriptions {
       }
     }
   ''';
+
+  static String newLoungeChatMessage(String loungeId) => '''
+    subscription {
+      newLoungeChatMessage(loungeId: ${jsonEncode(loungeId)}) {
+        messageId
+        loungeId
+        senderId
+        senderRole
+        text
+        createdAt
+      }
+    }
+  ''';
 }
