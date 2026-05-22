@@ -156,12 +156,6 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Подставить ключ Яндекс Карт
-        env:
-          YANDEX_KEY: ${{ secrets.YANDEX_MAPS_API_KEY }}
-        run: |
-          echo "yandex.maps.api.key=${YANDEX_KEY}" >> android/local.properties
-
       - name: Декодировать keystore
         env:
           KEYSTORE_B64: ${{ secrets.KEYSTORE_BASE64 }}
