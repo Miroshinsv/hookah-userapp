@@ -47,7 +47,28 @@ class _MainScreenState extends State<MainScreen> {
     ];
 
     return Scaffold(
-      body: IndexedStack(index: _index, children: tabs),
+      body: Column(
+        children: [
+          if (auth.isOffline)
+            Container(
+              color: const Color(0xFF8B1A1A),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.wifi_off, size: 14, color: Colors.white70),
+                  SizedBox(width: 6),
+                  Text(
+                    'Нет подключения к сети',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(child: IndexedStack(index: _index, children: tabs)),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) {

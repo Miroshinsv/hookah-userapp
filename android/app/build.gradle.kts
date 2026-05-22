@@ -14,6 +14,17 @@ if (keyPropertiesFile.exists()) {
     keyProperties.load(keyPropertiesFile.inputStream())
 }
 
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+val yandexMapsApiKey: String = run {
+    val fromFile = localProperties.getProperty("yandex.maps.api.key", "")
+    if (fromFile.isNotBlank() && fromFile != "YOUR_KEY_HERE") fromFile
+    else System.getenv("YANDEX_MAPS_API_KEY") ?: ""
+}
+
 android {
     namespace = "ru.hookahorder.user_app"
     compileSdk = flutter.compileSdkVersion
@@ -38,12 +49,17 @@ android {
         }
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "ru.hookahorder.user_app"
-        minSdk = flutter.minSdkVersion
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        buildConfigField("String", "YANDEX_MAPS_API_KEY", "\"$yandexMapsApiKey\"")
     }
 
     buildTypes {
@@ -63,4 +79,5 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation("com.yandex.android:maps.mobile:4.22.0-lite")
 }

@@ -17,12 +17,17 @@ class AuthState extends ChangeNotifier {
   String? _staffId;
   String? _firstName;
   String? _lastName;
+  List<String> _roles = [];
+  bool _isOffline = false;
 
   AuthState() {
     gqlClient = ValueNotifier(_buildClient(null));
   }
 
   bool get isLoggedIn => _token != null;
+  bool get isOwner => _roles.contains('owner');
+  List<String> get roles => List.unmodifiable(_roles);
+  bool get isOffline => _isOffline;
   String? get token => _token;
   String? get phone => _phone;
   String? get role => _role;
@@ -41,6 +46,7 @@ class AuthState extends ChangeNotifier {
       _staffId   = await _storage.readStaffId();
       _firstName = await _storage.readFirstName();
       _lastName  = await _storage.readLastName();
+      _roles     = await _storage.readRoles();
       gqlClient.value = _buildClient(token, onUnauthenticated: _handleUnauthenticated);
       AppLogger.i(_tag, 'restored session phone=$_phone');
       notifyListeners();
@@ -92,16 +98,32 @@ class AuthState extends ChangeNotifier {
         document: gql(GQLQueries.me),
         fetchPolicy: FetchPolicy.networkOnly,
       ));
-      if (result.hasException || result.data == null) {
-        AppLogger.w(_tag, 'fetchMe error', result.exception);
+      if (result.hasException) {
+        final isNetworkError = result.exception?.linkException != null;
+        if (isNetworkError) {
+          AppLogger.w(_tag, 'fetchMe offline', result.exception);
+          _isOffline = true;
+          notifyListeners();
+        } else {
+          AppLogger.w(_tag, 'fetchMe error', result.exception);
+        }
         return;
       }
+      if (result.data == null) return;
+
+      if (_isOffline) {
+        _isOffline = false;
+      }
+
       final me = result.data!['me'] as Map<String, dynamic>?;
       if (me == null) return;
 
       final staffId   = me['id'] as String?;
       final firstName = me['firstName'] as String?;
       final lastName  = me['lastName'] as String?;
+      final rolesRaw  = (me['roles'] as List<dynamic>?)
+          ?.map((r) => r as String)
+          .toList() ?? [];
 
       if (staffId != null) {
         _staffId = staffId;
@@ -109,10 +131,12 @@ class AuthState extends ChangeNotifier {
       }
       _firstName = (firstName?.isEmpty ?? true) ? null : firstName;
       _lastName  = (lastName?.isEmpty ?? true) ? null : lastName;
+      _roles     = rolesRaw;
       await _storage.writeFirstName(_firstName ?? '');
       await _storage.writeLastName(_lastName ?? '');
+      await _storage.writeRoles(_roles);
 
-      AppLogger.i(_tag, 'fetchMe ok firstName=$_firstName lastName=$_lastName');
+      AppLogger.i(_tag, 'fetchMe ok firstName=$_firstName lastName=$_lastName roles=$_roles');
       notifyListeners();
     } catch (e, stack) {
       AppLogger.w(_tag, 'fetchMe failed', e, stack);
@@ -139,6 +163,7 @@ class AuthState extends ChangeNotifier {
     _staffId   = null;
     _firstName = null;
     _lastName  = null;
+    _roles     = [];
     gqlClient.value = _buildClient(null);
     notifyListeners();
   }

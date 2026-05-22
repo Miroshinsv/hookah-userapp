@@ -73,6 +73,27 @@ class GQLQueries {
     }
   ''';
 
+  static String staffProfile(String staffId) => '''
+    query {
+      staffProfile(staffId: ${jsonEncode(staffId)}) {
+        id
+        userId
+        firstName
+        lastName
+        bio
+        photoUrl
+        roles
+        rating
+        lounges {
+          loungeId
+          name
+          shortAddress
+          schedule
+        }
+      }
+    }
+  ''';
+
   static String staffSchedule(String staffId) => '''
     query {
       staffSchedule(staffId: ${jsonEncode(staffId)}) {

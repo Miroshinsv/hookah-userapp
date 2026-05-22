@@ -134,8 +134,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
               ),
-              const Center(
-                child: Text('Пользователь', style: TextStyle(color: Colors.grey)),
+              Center(
+                child: Text(
+                  auth.isOwner ? 'Владелец' : 'Пользователь',
+                  style: TextStyle(
+                    color: auth.isOwner
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey,
+                  ),
+                ),
               ),
               const SizedBox(height: 32),
               const Divider(),
@@ -222,6 +229,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
 
               const SizedBox(height: 32),
+
+              if (auth.isOwner) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _editing
+                        ? null
+                        : () => Navigator.pushNamed(context, '/lounge/create'),
+                    icon: const Icon(Icons.add_business_outlined),
+                    label: const Text('Создать кальянную'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               SizedBox(
                 width: double.infinity,

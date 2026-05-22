@@ -78,8 +78,10 @@ class _LoungeInfo extends StatelessWidget {
             children: [
               const Icon(Icons.location_on, color: Colors.grey, size: 16),
               const SizedBox(width: 4),
-              Text(lounge.shortAddress!,
-                  style: const TextStyle(color: Colors.grey)),
+              Flexible(
+                child: Text(lounge.shortAddress!,
+                    style: const TextStyle(color: Colors.grey)),
+              ),
             ],
           ),
         ],
@@ -89,8 +91,10 @@ class _LoungeInfo extends StatelessWidget {
             children: [
               const Icon(Icons.phone, color: Colors.grey, size: 16),
               const SizedBox(width: 4),
-              Text(lounge.phone!,
-                  style: const TextStyle(color: Colors.grey)),
+              Flexible(
+                child: Text(lounge.phone!,
+                    style: const TextStyle(color: Colors.grey)),
+              ),
             ],
           ),
         ],
@@ -113,7 +117,7 @@ class _LoungeInfo extends StatelessWidget {
                     child: Text(e.key,
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                   ),
-                  Text(e.value),
+                  Flexible(child: Text(e.value)),
                 ],
               ),
             ),
@@ -127,20 +131,31 @@ class _LoungeInfo extends StatelessWidget {
           ...lounge.staff.map((s) => _StaffTile(staff: s)),
         ],
         const SizedBox(height: 24),
-        if (lounge.chatEnabled) ...[
-          OutlinedButton.icon(
-            onPressed: () =>
-                Navigator.pushNamed(context, '/lounge/chat', arguments: lounge),
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Написать в чат заведения'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
+        _ChatButton(lounge: lounge),
+        const SizedBox(height: 12),
         _OrderButton(lounge: lounge),
       ],
+    );
+  }
+}
+
+class _ChatButton extends StatelessWidget {
+  final Lounge lounge;
+  const _ChatButton({required this.lounge});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasOwner = lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
+    final enabled = hasOwner && lounge.chatEnabled;
+    return OutlinedButton.icon(
+      onPressed: enabled
+          ? () => Navigator.pushNamed(context, '/lounge/chat', arguments: lounge)
+          : null,
+      icon: const Icon(Icons.chat_bubble_outline),
+      label: const Text('Написать в чат заведения'),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 48),
+      ),
     );
   }
 }
@@ -273,6 +288,11 @@ class _StaffTileState extends State<_StaffTile> {
         children: [
           ListTile(
             contentPadding: EdgeInsets.zero,
+            onTap: () => Navigator.pushNamed(
+              context,
+              '/staff',
+              arguments: widget.staff.id,
+            ),
             leading: CircleAvatar(
               backgroundColor:
                   Theme.of(context).colorScheme.secondaryContainer,
@@ -285,6 +305,7 @@ class _StaffTileState extends State<_StaffTile> {
             ),
             title: Text('${widget.staff.firstName} ${widget.staff.lastName}'),
             subtitle: Text(widget.staff.displayRoles),
+            trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
           ),
           if (_loading)
             const Padding(

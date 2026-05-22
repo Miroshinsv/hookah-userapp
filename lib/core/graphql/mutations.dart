@@ -81,6 +81,31 @@ class GQLMutations {
     }
   ''';
 
+  static String createLounge({
+    required String name,
+    String? description,
+    String? shortAddress,
+    String? phone,
+    String? schedule,
+    required double latitude,
+    required double longitude,
+  }) => '''
+    mutation {
+      createLounge(
+        name: ${jsonEncode(name)}
+        ${description != null && description.isNotEmpty ? 'description: ${jsonEncode(description)}' : ''}
+        ${shortAddress != null && shortAddress.isNotEmpty ? 'shortAddress: ${jsonEncode(shortAddress)}' : ''}
+        ${phone != null && phone.isNotEmpty ? 'phone: ${jsonEncode(phone)}' : ''}
+        ${schedule != null && schedule.isNotEmpty ? 'schedule: ${jsonEncode(schedule)}' : ''}
+        latitude: $latitude
+        longitude: $longitude
+      ) {
+        id
+        name
+      }
+    }
+  ''';
+
   static String sendLoungeChatMessage(String loungeId, String text) => '''
     mutation {
       sendLoungeChatMessage(loungeId: ${jsonEncode(loungeId)}, text: ${jsonEncode(text)}) {
