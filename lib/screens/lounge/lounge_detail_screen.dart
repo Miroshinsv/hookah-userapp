@@ -45,6 +45,8 @@ class _LoungeInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasOwner =
+        lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -75,11 +77,16 @@ class _LoungeInfo extends StatelessWidget {
         if (lounge.shortAddress != null) ...[
           const SizedBox(height: 8),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Icon(Icons.location_on, color: Colors.grey, size: 16),
               const SizedBox(width: 4),
-              Text(lounge.shortAddress!,
-                  style: const TextStyle(color: Colors.grey)),
+              Expanded(
+                child: Text(
+                  lounge.shortAddress!,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ),
             ],
           ),
         ],
@@ -129,8 +136,11 @@ class _LoungeInfo extends StatelessWidget {
         const SizedBox(height: 24),
         if (lounge.chatEnabled) ...[
           OutlinedButton.icon(
-            onPressed: () =>
-                Navigator.pushNamed(context, '/lounge/chat', arguments: lounge),
+            onPressed: hasOwner
+                ? () => Navigator.pushNamed(
+                    context, '/lounge/chat',
+                    arguments: lounge)
+                : null,
             icon: const Icon(Icons.chat_bubble_outline),
             label: const Text('Написать в чат заведения'),
             style: OutlinedButton.styleFrom(
@@ -285,6 +295,12 @@ class _StaffTileState extends State<_StaffTile> {
             ),
             title: Text('${widget.staff.firstName} ${widget.staff.lastName}'),
             subtitle: Text(widget.staff.displayRoles),
+            trailing: const Icon(Icons.chevron_right, size: 18),
+            onTap: () => Navigator.pushNamed(
+              context,
+              '/staff',
+              arguments: widget.staff,
+            ),
           ),
           if (_loading)
             const Padding(

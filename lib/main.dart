@@ -15,6 +15,7 @@ import 'screens/lounge/lounge_detail_screen.dart';
 import 'screens/lounge/lounge_chat_screen.dart';
 import 'screens/order/new_order_screen.dart';
 import 'screens/order/order_detail_screen.dart';
+import 'screens/staff/staff_detail_screen.dart';
 
 // Цветовая палитра
 const kBgDark   = Color(0xFF1A0E05);
@@ -171,6 +172,7 @@ class _AppState extends State<App> {
             '/lounge/chat': (_) => const LoungeChatScreen(),
             '/order/new': (_) => const NewOrderScreen(),
             '/order': (_) => const OrderDetailScreen(),
+            '/staff': (_) => const StaffDetailScreen(),
           },
         ),
       ),
