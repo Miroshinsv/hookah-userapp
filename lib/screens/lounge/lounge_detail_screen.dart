@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
@@ -92,13 +93,27 @@ class _LoungeInfo extends StatelessWidget {
         ],
         if (lounge.phone != null) ...[
           const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.phone, color: Colors.grey, size: 16),
-              const SizedBox(width: 4),
-              Text(lounge.phone!,
-                  style: const TextStyle(color: Colors.grey)),
-            ],
+          GestureDetector(
+            onTap: () async {
+              final uri = Uri(scheme: 'tel', path: lounge.phone!);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              }
+            },
+            child: Row(
+              children: [
+                const Icon(Icons.phone, color: Colors.blue, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  lounge.phone!,
+                  style: const TextStyle(
+                    color: Colors.blue,
+                    decoration: TextDecoration.underline,
+                    decorationColor: Colors.blue,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
         if (lounge.description != null && lounge.description!.isNotEmpty) ...[
