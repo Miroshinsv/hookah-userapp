@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:package_info_plus/package_info_plus.dart';
+
+// Версия подставляется при сборке через --dart-define=APP_VERSION=x.y.z
+const _kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '0.0.0');
 
 class ReleaseInfo {
   final String tagName;
@@ -27,8 +29,7 @@ class UpdateService {
   /// Returns [ReleaseInfo] if a newer version is available, otherwise null.
   static Future<ReleaseInfo?> checkForUpdate() async {
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
-      final current = packageInfo.version;
+      const current = _kAppVersion;
 
       final response = await http
           .get(Uri.parse(_apiUrl), headers: {

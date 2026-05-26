@@ -63,7 +63,7 @@ class _RatingWidgetState extends State<RatingWidget> {
       client.query(QueryOptions(
         document: gql(GQLQueries.ratingStats(
             widget.targetType, widget.targetId)),
-        fetchPolicy: FetchPolicy.cacheFirst,
+        fetchPolicy: FetchPolicy.networkOnly,
       )),
       if (isLoggedIn)
         client.query(QueryOptions(
@@ -100,8 +100,27 @@ class _RatingWidgetState extends State<RatingWidget> {
     });
   }
 
+  Future<void> _refetchStats() async {
+    if (!mounted) return;
+    final client = GraphQLProvider.of(context).value;
+    final result = await client.query(QueryOptions(
+      document: gql(GQLQueries.ratingStats(widget.targetType, widget.targetId)),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted) return;
+    final statsData =
+        result.data?['ratingStats'] as Map<String, dynamic>?;
+    if (statsData != null) {
+      setState(() {
+        _avg = (statsData['avgRating'] as num?)?.toDouble() ?? _avg;
+        _count = statsData['count'] as int?;
+      });
+    }
+  }
+
   Future<void> _submitRating(int score) async {
     if (_submitting) return;
+    final isUpdate = _userScore > 0; // сохраняем до setState
     setState(() => _submitting = true);
 
     final client = GraphQLProvider.of(context).value;
@@ -125,12 +144,18 @@ class _RatingWidgetState extends State<RatingWidget> {
           _count = data['count'] as int?;
         }
       });
+
+      // Если мутация не вернула обновлённую статистику — запрашиваем отдельно
+      if (data == null ||
+          data['avgRating'] == null ||
+          data['count'] == null) {
+        _refetchStats();
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_userScore > 0
-                ? 'Оценка обновлена'
-                : 'Оценка сохранена'),
+            content: Text(isUpdate ? 'Оценка обновлена' : 'Оценка сохранена'),
             duration: const Duration(seconds: 2),
           ),
         );

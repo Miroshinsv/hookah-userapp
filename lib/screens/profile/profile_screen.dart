@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/mutations.dart';
+
+// Версия подставляется при сборке через --dart-define=APP_VERSION=x.y.z
+const _kAppVersion = String.fromEnvironment('APP_VERSION');
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,14 +22,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _editing = false;
   bool _loading = false;
   String? _error;
-  String? _version;
 
   @override
   void initState() {
     super.initState();
-    PackageInfo.fromPlatform().then((info) {
-      if (mounted) setState(() => _version = info.version);
-    });
   }
 
   @override
@@ -258,15 +256,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 24),
 
-              Center(
-                child: Text(
-                  _version != null ? 'v$_version' : '',
-                  style: TextStyle(
-                    color: Colors.grey.withValues(alpha: 0.5),
-                    fontSize: 12,
+              if (_kAppVersion.isNotEmpty)
+                Center(
+                  child: Text(
+                    'v$_kAppVersion',
+                    style: TextStyle(
+                      color: Colors.grey.withValues(alpha: 0.5),
+                      fontSize: 12,
+                    ),
                   ),
                 ),
-              ),
 
               const SizedBox(height: 16),
             ],

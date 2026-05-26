@@ -49,6 +49,7 @@ class _LoungeInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasOwner =
         lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
+    final isLoggedIn = context.watch<AuthState>().isLoggedIn;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -138,9 +139,8 @@ class _LoungeInfo extends StatelessWidget {
         const SizedBox(height: 24),
         if (lounge.chatEnabled) ...[
           OutlinedButton.icon(
-            onPressed: hasOwner
-                ? () => Navigator.pushNamed(
-                    context, '/lounge/chat',
+            onPressed: hasOwner && isLoggedIn
+                ? () => Navigator.pushNamed(context, '/lounge/chat',
                     arguments: lounge)
                 : null,
             icon: const Icon(Icons.chat_bubble_outline),
@@ -149,6 +149,21 @@ class _LoungeInfo extends StatelessWidget {
               minimumSize: const Size(double.infinity, 48),
             ),
           ),
+          if (!hasOwner)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.block, size: 14, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Заведение не подключено',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 12),
         ],
         _OrderButton(lounge: lounge),
@@ -165,7 +180,8 @@ class _OrderButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isLoggedIn = context.watch<AuthState>().isLoggedIn;
-    final hasOwner = lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
+    final hasOwner =
+        lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -173,7 +189,8 @@ class _OrderButton extends StatelessWidget {
         ElevatedButton.icon(
           onPressed: hasOwner
               ? isLoggedIn
-                  ? () => Navigator.pushNamed(context, '/order/new', arguments: lounge)
+                  ? () => Navigator.pushNamed(context, '/order/new',
+                      arguments: lounge)
                   : () => _promptLogin(context)
               : null,
           icon: const Icon(Icons.add_shopping_cart),
@@ -222,7 +239,8 @@ class _OrderButton extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Необходима авторизация'),
-        content: const Text('Войдите или зарегистрируйтесь, чтобы сделать заказ.'),
+        content:
+            const Text('Войдите или зарегистрируйтесь, чтобы сделать заказ.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -243,6 +261,7 @@ class _OrderButton extends StatelessWidget {
 
 class _StaffTile extends StatefulWidget {
   final StaffMember staff;
+
   const _StaffTile({required this.staff});
 
   @override
@@ -267,7 +286,9 @@ class _StaffTileState extends State<_StaffTile> {
     ));
     if (!mounted) return;
     final list = result.data?['staffSchedule'] as List<Object?>?;
-    final data = (list != null && list.isNotEmpty) ? list.first as Map<String, dynamic>? : null;
+    final data = (list != null && list.isNotEmpty)
+        ? list.first as Map<String, dynamic>?
+        : null;
     setState(() {
       _loading = false;
       if (data != null) {
@@ -286,8 +307,7 @@ class _StaffTileState extends State<_StaffTile> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(
-              backgroundColor:
-                  Theme.of(context).colorScheme.secondaryContainer,
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
               backgroundImage: widget.staff.photoUrl != null
                   ? NetworkImage(widget.staff.photoUrl!)
                   : null,
@@ -323,6 +343,7 @@ class _StaffTileState extends State<_StaffTile> {
 
 class _ScheduleChips extends StatelessWidget {
   final Map<String, String> schedule;
+
   const _ScheduleChips({required this.schedule});
 
   static const _allDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -344,17 +365,14 @@ class _ScheduleChips extends StatelessWidget {
                 height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: isWorking
-                      ? cs.primaryContainer
-                      : Colors.grey.shade100,
+                  color: isWorking ? cs.primaryContainer : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   day,
                   style: TextStyle(
                     fontSize: 11,
-                    fontWeight:
-                        isWorking ? FontWeight.bold : FontWeight.normal,
+                    fontWeight: isWorking ? FontWeight.bold : FontWeight.normal,
                     color: isWorking
                         ? cs.onPrimaryContainer
                         : Colors.grey.shade400,
