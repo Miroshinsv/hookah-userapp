@@ -23,7 +23,7 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
     _scale = Tween<double>(begin: 0.85, end: 1.0)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
@@ -41,10 +41,7 @@ class _SplashScreenState extends State<SplashScreen>
     await auth.init();
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
-    Navigator.pushReplacementNamed(
-      context,
-      '/main'
-    );
+    Navigator.pushReplacementNamed(context, '/main');
   }
 
   @override
@@ -139,25 +136,6 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
-
-          // Версия внизу
-          Positioned(
-            bottom: 32,
-            left: 0,
-            right: 0,
-            child: FadeTransition(
-              opacity: _fade,
-              child: const Text(
-                'v1.0',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Color.fromRGBO(245, 230, 208, 0.2),
-                  fontSize: 11,
-                  letterSpacing: 2,
-                ),
               ),
             ),
           ),

@@ -7,6 +7,7 @@ import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/utils/schedule_parser.dart';
 import '../../widgets/lounge_photo_gallery.dart';
+import '../../widgets/rating_widget.dart';
 
 class LoungeDetailScreen extends StatelessWidget {
   const LoungeDetailScreen({super.key});
@@ -51,29 +52,15 @@ class _LoungeInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                lounge.name,
-                style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-            ),
-            if (lounge.rating != null)
-              Row(
-                children: [
-                  const Icon(Icons.star, color: Colors.amber, size: 20),
-                  const SizedBox(width: 4),
-                  Text(
-                    lounge.rating!.toStringAsFixed(1),
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-          ],
+        Text(
+          lounge.name,
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        RatingWidget(
+          targetType: 'lounge',
+          targetId: lounge.id,
+          initialAvg: lounge.rating,
         ),
         if (lounge.shortAddress != null) ...[
           const SizedBox(height: 8),

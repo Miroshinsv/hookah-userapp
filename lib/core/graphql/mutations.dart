@@ -89,4 +89,24 @@ class GQLMutations {
       }
     }
   ''';
+
+  static String rateLounge(String loungeId, int score) => '''
+    mutation {
+      rateLounge(loungeId: ${jsonEncode(loungeId)}, score: $score) {
+        ratingId
+        avgRating
+        count
+      }
+    }
+  ''';
+
+  static String rateStaff(String staffId, int score) => '''
+    mutation {
+      rateStaff(staffId: ${jsonEncode(staffId)}, score: $score) {
+        ratingId
+        avgRating
+        count
+      }
+    }
+  ''';
 }

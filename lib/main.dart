@@ -5,9 +5,11 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/auth_state.dart';
 import 'core/chat/unread_state.dart';
+import 'core/connectivity/connectivity_service.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/utils/analytics.dart';
 import 'core/utils/logger.dart';
+import 'widgets/connectivity_wrapper.dart';
 import 'screens/splash_screen.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/main_screen.dart';
@@ -148,6 +150,7 @@ class App extends StatefulWidget {
 class _AppState extends State<App> {
   final AuthState _authState = AuthState();
   final UnreadState _unreadState = UnreadState();
+  final ConnectivityService _connectivityService = ConnectivityService();
 
   @override
   Widget build(BuildContext context) {
@@ -155,6 +158,7 @@ class _AppState extends State<App> {
       providers: [
         ChangeNotifierProvider.value(value: _authState),
         ChangeNotifierProvider.value(value: _unreadState),
+        ChangeNotifierProvider.value(value: _connectivityService),
       ],
       child: GraphQLProvider(
         client: _authState.gqlClient,
@@ -163,6 +167,7 @@ class _AppState extends State<App> {
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(),
           navigatorObservers: [Analytics.observer],
+          builder: (context, child) => ConnectivityWrapper(child: child!),
           initialRoute: '/',
           routes: {
             '/': (_) => const SplashScreen(),

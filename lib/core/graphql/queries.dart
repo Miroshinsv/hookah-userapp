@@ -116,4 +116,22 @@ class GQLQueries {
       }
     }
   ''';
+
+  static String hasRated(String targetType, String targetId) => '''
+    query {
+      hasRated(targetType: ${jsonEncode(targetType)}, targetId: ${jsonEncode(targetId)}) {
+        rated
+        score
+      }
+    }
+  ''';
+
+  static String ratingStats(String targetType, String targetId) => '''
+    query {
+      ratingStats(targetType: ${jsonEncode(targetType)}, targetId: ${jsonEncode(targetId)}) {
+        avgRating
+        count
+      }
+    }
+  ''';
 }

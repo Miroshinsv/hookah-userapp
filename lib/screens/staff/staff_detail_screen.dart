@@ -3,6 +3,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/utils/schedule_parser.dart';
+import '../../widgets/rating_widget.dart';
 
 class StaffDetailScreen extends StatefulWidget {
   const StaffDetailScreen({super.key});
@@ -167,22 +168,12 @@ class _ProfileBody extends StatelessWidget {
                           .withAlpha(153),
                       fontSize: 14),
                 ),
-                if (rating != null) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.star,
-                          color: Colors.amber, size: 20),
-                      const SizedBox(width: 4),
-                      Text(
-                        rating.toStringAsFixed(1),
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ],
+                const SizedBox(height: 12),
+                RatingWidget(
+                  targetType: 'staff',
+                  targetId: staff.id,
+                  initialAvg: rating,
+                ),
               ],
             ),
           ),
