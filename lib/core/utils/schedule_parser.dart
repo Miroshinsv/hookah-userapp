@@ -14,7 +14,7 @@ class ScheduleParser {
   // Ключ текущего дня по weekday (1=Пн … 7=Вс)
   static const _dayKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
-  /// Полное расписание на неделю: {'Пн': '12:00-23:00', ...}
+  /// Расписание из формата ключей-дней-недели: {'mon': '12:00-23:00', ...} → {'Пн': '12:00-23:00', ...}
   static Map<String, String> parse(String? scheduleJson) {
     if (scheduleJson == null || scheduleJson.isEmpty) return {};
     try {
@@ -23,6 +23,29 @@ class ScheduleParser {
       for (final key in _days.keys) {
         if (raw.containsKey(key)) {
           result[_days[key]!] = raw[key] as String;
+        }
+      }
+      return result;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Расписание сотрудника на текущую неделю из формата ключей-дней-месяца:
+  /// {'02': '12:00-23:00', ...} → {'Пн': '12:00-23:00', ...}
+  static Map<String, String> parseCurrentWeek(String? scheduleJson) {
+    if (scheduleJson == null || scheduleJson.isEmpty) return {};
+    try {
+      final raw = jsonDecode(scheduleJson) as Map<String, dynamic>;
+      final now = DateTime.now();
+      final monday = now.subtract(Duration(days: now.weekday - 1));
+      const labels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+      final result = <String, String>{};
+      for (var i = 0; i < 7; i++) {
+        final day = monday.add(Duration(days: i));
+        final key = day.day.toString().padLeft(2, '0');
+        if (raw.containsKey(key)) {
+          result[labels[i]] = raw[key] as String;
         }
       }
       return result;

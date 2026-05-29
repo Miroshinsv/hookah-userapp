@@ -215,7 +215,7 @@ class _LoungeScheduleCard extends StatelessWidget {
     final name = lounge['name'] as String? ?? '';
     final shortAddress = lounge['shortAddress'] as String?;
     final schedule =
-        ScheduleParser.parse(lounge['schedule'] as String?);
+        ScheduleParser.parseCurrentWeek(lounge['schedule'] as String?);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),

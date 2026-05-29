@@ -292,7 +292,7 @@ class _StaffTileState extends State<_StaffTile> {
     setState(() {
       _loading = false;
       if (data != null) {
-        _schedule = ScheduleParser.parse(data['schedule'] as String?);
+        _schedule = ScheduleParser.parseCurrentWeek(data['schedule'] as String?);
       }
     });
   }
