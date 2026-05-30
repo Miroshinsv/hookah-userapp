@@ -109,4 +109,19 @@ class GQLMutations {
       }
     }
   ''';
+
+  static String createComment(
+          String entityType, String entityId, String text) =>
+      '''
+    mutation {
+      createComment(
+        entityType: ${jsonEncode(entityType)}
+        entityId: ${jsonEncode(entityId)}
+        text: ${jsonEncode(text)}
+      ) {
+        commentId
+        status
+      }
+    }
+  ''';
 }

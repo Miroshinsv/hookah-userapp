@@ -6,6 +6,7 @@ import '../../core/auth/auth_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/utils/schedule_parser.dart';
+import '../../widgets/comments_widget.dart';
 import '../../widgets/lounge_photo_gallery.dart';
 import '../../widgets/rating_widget.dart';
 
@@ -56,12 +57,6 @@ class _LoungeInfo extends StatelessWidget {
         Text(
           lounge.name,
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 10),
-        RatingWidget(
-          targetType: 'lounge',
-          targetId: lounge.id,
-          initialAvg: lounge.rating,
         ),
         if (lounge.shortAddress != null) ...[
           const SizedBox(height: 8),
@@ -136,6 +131,29 @@ class _LoungeInfo extends StatelessWidget {
           const SizedBox(height: 8),
           ...lounge.staff.map((s) => _StaffTile(staff: s)),
         ],
+
+        // ── Оценки и отзывы ──────────────────────────────────────────
+        const SizedBox(height: 20),
+        const Divider(),
+        const SizedBox(height: 12),
+        const Text(
+          'Оценки и отзывы',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        RatingWidget(
+          targetType: 'lounge',
+          targetId: lounge.id,
+          initialAvg: lounge.rating,
+        ),
+        const SizedBox(height: 16),
+        const Divider(height: 1),
+        const SizedBox(height: 16),
+        CommentsWidget(
+          entityType: 'lounge',
+          entityId: lounge.id,
+        ),
+
         const SizedBox(height: 24),
         if (lounge.chatEnabled) ...[
           OutlinedButton.icon(

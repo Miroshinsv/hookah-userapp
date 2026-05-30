@@ -3,6 +3,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/utils/schedule_parser.dart';
+import '../../widgets/comments_widget.dart';
 import '../../widgets/rating_widget.dart';
 
 class StaffDetailScreen extends StatefulWidget {
@@ -168,12 +169,6 @@ class _ProfileBody extends StatelessWidget {
                           .withAlpha(153),
                       fontSize: 14),
                 ),
-                const SizedBox(height: 12),
-                RatingWidget(
-                  targetType: 'staff',
-                  targetId: staff.id,
-                  initialAvg: rating,
-                ),
               ],
             ),
           ),
@@ -198,6 +193,29 @@ class _ProfileBody extends StatelessWidget {
             const SizedBox(height: 12),
             ...lounges.map((l) => _LoungeScheduleCard(lounge: l)),
           ],
+
+          // ── Оценки и отзывы ───────────────────────────────────────────
+          const SizedBox(height: 20),
+          const Divider(),
+          const SizedBox(height: 12),
+          const Text(
+            'Оценки и отзывы',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          RatingWidget(
+            targetType: 'staff',
+            targetId: staff.id,
+            initialAvg: rating,
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
+          CommentsWidget(
+            entityType: 'staff',
+            entityId: staff.id,
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );

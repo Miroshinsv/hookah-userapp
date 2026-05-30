@@ -134,4 +134,18 @@ class GQLQueries {
       }
     }
   ''';
+
+  static String comments(String entityType, String entityId) => '''
+    query {
+      comments(entityType: ${jsonEncode(entityType)}, entityId: ${jsonEncode(entityId)}) {
+        commentId
+        entityType
+        entityId
+        userId
+        text
+        status
+        createdAt
+      }
+    }
+  ''';
 }
