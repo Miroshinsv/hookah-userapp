@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/utils/schedule_parser.dart';
+
+const _kDefaultCenter = Point(latitude: 55.7558, longitude: 37.6173);
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -18,13 +19,19 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   bool _showList = false;
-  final MapController _mapController = MapController();
-  LatLng? _userLocation;
+  YandexMapController? _mapController;
+  Point? _userLocation;
 
   @override
   void initState() {
     super.initState();
     _locateUser();
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
   }
 
   Future<void> _locateUser() async {
@@ -39,17 +46,16 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
       if (!mounted) return;
-      final loc = LatLng(pos.latitude, pos.longitude);
+      final loc = Point(latitude: pos.latitude, longitude: pos.longitude);
       setState(() => _userLocation = loc);
-      _mapController.move(loc, 14);
-    } catch (_) {
-      // геолокация недоступна — остаёмся на дефолтном центре
-    }
+      _mapController?.moveCamera(
+        CameraUpdate.newCameraPosition(CameraPosition(target: loc, zoom: 14)),
+        animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.5),
+      );
+    } catch (_) {}
   }
 
   void _showLoungeSheet(Lounge lounge) {
@@ -103,7 +109,13 @@ class _MapScreenState extends State<MapScreen> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: FloatingActionButton.small(
                     heroTag: 'locate',
-                    onPressed: () => _mapController.move(_userLocation!, 14),
+                    onPressed: () => _mapController?.moveCamera(
+                      CameraUpdate.newCameraPosition(
+                        CameraPosition(target: _userLocation!, zoom: 14),
+                      ),
+                      animation: const MapAnimation(
+                          type: MapAnimationType.smooth, duration: 0.5),
+                    ),
                     child: const Icon(Icons.my_location),
                   ),
                 ),
@@ -123,43 +135,50 @@ class _MapScreenState extends State<MapScreen> {
   Widget _buildMap(List<Lounge> lounges) {
     final valid =
         lounges.where((l) => l.latitude != 0 || l.longitude != 0).toList();
-    final center = valid.isNotEmpty
-        ? LatLng(valid.first.latitude, valid.first.longitude)
-        : const LatLng(55.7558, 37.6173);
+    final initialCenter = valid.isNotEmpty
+        ? Point(latitude: valid.first.latitude, longitude: valid.first.longitude)
+        : _kDefaultCenter;
 
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(initialCenter: center, initialZoom: 12),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'ru.hookahorder.app',
+    final mapObjects = <MapObject>[
+      // маркеры кальянных
+      ...valid.map(
+        (l) => PlacemarkMapObject(
+          opacity: (l.ownerUserId != null && l.ownerUserId!.isNotEmpty) ? 1.0 : 0.6,
+          mapId: MapObjectId('lounge_${l.id}'),
+          point: Point(latitude: l.latitude, longitude: l.longitude),
+          icon: PlacemarkIcon.single(
+            PlacemarkIconStyle(
+              image: BitmapDescriptor.fromAssetImage('assets/marker.png'),
+              scale: 0.15,
+            ),
+          ),
+          onTap: (_, __) => _showLoungeSheet(l),
         ),
-        MarkerLayer(
-          markers: [
-            // маркеры кальянных
-            ...valid.map((l) => Marker(
-                  point: LatLng(l.latitude, l.longitude),
-                  width: 50,
-                  height: 50,
-                  rotate: true,
-                  child: GestureDetector(
-                    onTap: () => _showLoungeSheet(l),
-                    child: Image.asset('assets/marker.png',
-                        width: 50, height: 50),
-                  ),
-                )),
-            // маркер пользователя
-            if (_userLocation != null)
-              Marker(
-                point: _userLocation!,
-                width: 48,
-                height: 48,
-                child: _UserMarker(),
-              ),
-          ],
+      ),
+      // маркер пользователя
+      if (_userLocation != null)
+        PlacemarkMapObject(
+          mapId: const MapObjectId('user_location'),
+          point: _userLocation!,
+          icon: PlacemarkIcon.single(
+            PlacemarkIconStyle(
+              image: BitmapDescriptor.fromAssetImage('assets/marker_user.png'),
+              scale: 0.5,
+            ),
+          ),
         ),
-      ],
+    ];
+
+    return YandexMap(
+      onMapCreated: (controller) {
+        _mapController = controller;
+        controller.moveCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: initialCenter, zoom: 12),
+          ),
+        );
+      },
+      mapObjects: mapObjects,
     );
   }
 
@@ -198,52 +217,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 }
 
-// ─── User location marker ────────────────────────────────────────────────────
-
-class _UserMarker extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // внешнее свечение
-        const SizedBox(
-          width: 48,
-          height: 48,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0x220080FF),
-            ),
-          ),
-        ),
-        // синяя точка с белой обводкой
-        Container(
-          width: 18,
-          height: 18,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF1A73E8),
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x441A73E8),
-                blurRadius: 6,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 // ─── Bottom sheet ────────────────────────────────────────────────────────────
 
 class _LoungeBottomSheet extends StatelessWidget {
   final Lounge lounge;
-
   const _LoungeBottomSheet({required this.lounge});
 
   @override
@@ -251,7 +228,8 @@ class _LoungeBottomSheet extends StatelessWidget {
     final isOpen = ScheduleParser.isOpenNow(lounge.schedule);
     final todayHours = ScheduleParser.todayHours(lounge.schedule);
     final isLoggedIn = context.watch<AuthState>().isLoggedIn;
-    final hasOwner = lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
+    final hasOwner =
+        lounge.ownerUserId != null && lounge.ownerUserId!.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -260,16 +238,13 @@ class _LoungeBottomSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Название + рейтинг
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  lounge.name,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.bold),
-                ),
+                child: Text(lounge.name,
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
               ),
               if (lounge.rating != null) ...[
                 const SizedBox(width: 8),
@@ -277,54 +252,40 @@ class _LoungeBottomSheet extends StatelessWidget {
                   children: [
                     const Icon(Icons.star, color: Colors.amber, size: 18),
                     const SizedBox(width: 3),
-                    Text(
-                      lounge.rating!.toStringAsFixed(1),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                    Text(lounge.rating!.toStringAsFixed(1),
+                        style:
+                            const TextStyle(fontWeight: FontWeight.w600)),
                   ],
                 ),
               ],
             ],
           ),
           const SizedBox(height: 10),
-
-          // Статус: открыто / закрыто
           _StatusChip(isOpen: isOpen),
           const SizedBox(height: 10),
-
-          // Адрес
           if (lounge.shortAddress != null)
             Row(
               children: [
                 const Icon(Icons.location_on, size: 16, color: Colors.grey),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
-                    lounge.shortAddress!,
-                    style: const TextStyle(color: Colors.grey),
-                  ),
+                  child: Text(lounge.shortAddress!,
+                      style: const TextStyle(color: Colors.grey)),
                 ),
               ],
             ),
-
-          // Часы сегодня
           if (todayHours != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
                 const Icon(Icons.access_time, size: 16, color: Colors.grey),
                 const SizedBox(width: 6),
-                Text(
-                  'Сегодня: $todayHours',
-                  style: const TextStyle(color: Colors.grey),
-                ),
+                Text('Сегодня: $todayHours',
+                    style: const TextStyle(color: Colors.grey)),
               ],
             ),
           ],
-
           const SizedBox(height: 20),
-
-          // Кнопки
           Row(
             children: [
               Expanded(
@@ -353,8 +314,6 @@ class _LoungeBottomSheet extends StatelessWidget {
               ),
             ],
           ),
-
-          // Подсказка
           if (!hasOwner)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -363,10 +322,9 @@ class _LoungeBottomSheet extends StatelessWidget {
                 children: [
                   const Icon(Icons.block, size: 13, color: Colors.grey),
                   const SizedBox(width: 4),
-                  Text(
-                    'Заведение не подключено',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
+                  Text('Заведение не подключено',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade600)),
                 ],
               ),
             )
@@ -378,10 +336,9 @@ class _LoungeBottomSheet extends StatelessWidget {
                 children: [
                   const Icon(Icons.lock_outline, size: 13, color: Colors.grey),
                   const SizedBox(width: 4),
-                  Text(
-                    'Для заказа необходима авторизация',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
+                  Text('Для заказа необходима авторизация',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade600)),
                 ],
               ),
             ),
@@ -391,7 +348,7 @@ class _LoungeBottomSheet extends StatelessWidget {
   }
 
   void _promptLogin(BuildContext context) {
-    final nav = Navigator.of(context); // захватываем до закрытия bottom sheet
+    final nav = Navigator.of(context);
     nav.pop();
     showDialog(
       context: nav.context,
@@ -419,7 +376,6 @@ class _LoungeBottomSheet extends StatelessWidget {
 
 class _StatusChip extends StatelessWidget {
   final bool isOpen;
-
   const _StatusChip({required this.isOpen});
 
   @override
