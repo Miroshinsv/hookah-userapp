@@ -106,5 +106,5 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("com.yandex.android:maps.mobile:4.22.0-lite")
+    implementation("com.yandex.android:maps.mobile:4.6.1-lite")
 }
