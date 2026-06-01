@@ -5,13 +5,14 @@ allprojects {
     }
 }
 
-// yandex_mapkit 4.2.x bumped maps.mobile to 4.22.0 but its Java code still
-// references MapObjectTapListener/ClusterTapListener removed in that version.
-// Force the version that the plugin's Java code was actually written against.
+// yandex_mapkit 4.2.x declares maps.mobile:4.22.0 but its Java code uses
+// MapObjectTapListener/ClusterTapListener removed in 4.22.0, and LineStyle/
+// setHeadingModeActive not yet present in 4.6.1. 4.19.0 is the latest version
+// that has all four APIs simultaneously.
 subprojects {
     configurations.all {
         resolutionStrategy {
-            force("com.yandex.android:maps.mobile:4.6.1-lite")
+            force("com.yandex.android:maps.mobile:4.19.0-lite")
         }
     }
 }
