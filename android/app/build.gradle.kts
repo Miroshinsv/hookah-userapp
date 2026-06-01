@@ -73,6 +73,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["yandexApiKey"] = envKey("YANDEX_MAPS_API_KEY")
         buildConfigField(
             "String",
             "YANDEX_MAPS_API_KEY",
