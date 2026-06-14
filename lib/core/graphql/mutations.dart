@@ -124,4 +124,32 @@ class GQLMutations {
       }
     }
   ''';
+
+  static String submitFeedback({
+    required String orderId,
+    required String loungeId,
+    required int score,
+    String? comment,
+    String? firstName,
+    String? lastName,
+  }) => '''
+    mutation {
+      submitFeedback(
+        orderId: ${jsonEncode(orderId)}
+        loungeId: ${jsonEncode(loungeId)}
+        score: $score
+        ${comment != null ? 'comment: ${jsonEncode(comment)}' : ''}
+        ${firstName != null && firstName.isNotEmpty ? 'firstName: ${jsonEncode(firstName)}' : ''}
+        ${lastName != null && lastName.isNotEmpty ? 'lastName: ${jsonEncode(lastName)}' : ''}
+      ) {
+        feedbackId
+      }
+    }
+  ''';
+
+  static String cancelFeedbackRequest(String orderId) => '''
+    mutation {
+      cancelFeedbackRequest(orderId: ${jsonEncode(orderId)})
+    }
+  ''';
 }

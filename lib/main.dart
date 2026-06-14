@@ -116,7 +116,7 @@ ThemeData _buildTheme() {
     textTheme: const TextTheme(
       headlineMedium: TextStyle(color: kCream, fontWeight: FontWeight.bold),
       titleMedium:    TextStyle(color: kCream),
-      bodyMedium:     TextStyle(color: kCream),
+        bodyMedium:     TextStyle(color: kCream),
       bodySmall:      TextStyle(color: Color(0xFFAA9070)),
     ),
   );

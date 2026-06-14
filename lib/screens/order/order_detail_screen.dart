@@ -10,7 +10,15 @@ import '../../core/graphql/subscriptions.dart';
 import '../../core/models/lounge.dart';
 import '../../core/models/message.dart';
 import '../../core/models/order.dart';
+import '../../widgets/feedback_sheet.dart';
 import '../../widgets/status_badge.dart';
+
+const _terminalFeedbackStatuses = {
+  'completed',
+  'canceled',
+  'canceled_by_user',
+  'canceled_by_staff',
+};
 
 class OrderDetailScreen extends StatefulWidget {
   const OrderDetailScreen({super.key});
@@ -30,6 +38,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _initialized = false;
   int _newInSession = 0;   // новые сообщения от сотрудника, пока прокручено вверх
   bool _isAtBottom  = true;
+  bool _feedbackShown = false;
   late GraphQLClient _graphqlClient;
   late UnreadState _unreadState;
 
@@ -177,6 +186,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   setState(() => _order = _order.copyWith(status: newStatus));
+                  if (_terminalFeedbackStatuses.contains(newStatus) &&
+                      !_feedbackShown) {
+                    _feedbackShown = true;
+                    _maybeShowFeedbackDialog();
+                  }
                 }
               });
             }
@@ -332,6 +346,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         );
       },
+    );
+  }
+
+  // Показывает запрос отзыва только если на бэкенде есть активный
+  // (status == 'new') FeedbackRequest по этому заказу.
+  Future<void> _maybeShowFeedbackDialog() async {
+    if (!mounted || _lounge == null) return;
+    final result = await _graphqlClient.query(QueryOptions(
+      document: gql(GQLQueries.feedbackRequest(_order.id)),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted || result.hasException) return;
+    final request = result.data?['feedbackRequest'] as Map<String, dynamic>?;
+    if (request == null || request['status'] != 'new') return;
+
+    final auth = context.read<AuthState>();
+    final orderTime = _order.arrivalAt != null
+        ? _formatDateTime(_order.arrivalAt!)
+        : null;
+    await showFeedbackSheet(
+      context,
+      client: _graphqlClient,
+      title: request['message'] as String? ?? 'Заказ завершён',
+      loungeName: _lounge!.name,
+      loungeId: _lounge!.id,
+      orderId: _order.id,
+      orderTime: orderTime,
+      firstName: auth.firstName,
+      lastName: auth.lastName,
     );
   }
 

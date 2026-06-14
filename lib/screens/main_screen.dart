@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../core/auth/auth_state.dart';
 import '../core/chat/unread_state.dart';
+import '../core/graphql/queries.dart';
+import '../core/models/lounge.dart';
+import '../core/models/order.dart';
 import '../core/update/update_dialog.dart';
 import '../core/update/update_service.dart';
+import '../widgets/feedback_sheet.dart';
 import 'auth/auth_screen.dart';
 import 'map/map_screen.dart';
 import 'orders/orders_screen.dart';
@@ -23,13 +28,88 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkUpdate());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkUpdate();
+      await _checkPendingFeedback();
+    });
   }
 
   Future<void> _checkUpdate() async {
     final release = await UpdateService.checkForUpdate();
     if (release != null && mounted) {
       await showUpdateDialog(context, release);
+    }
+  }
+
+  String _formatDateTime(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}'
+          ' ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  // При запуске приложения показывает запросы отзыва (status == 'new'),
+  // оставшиеся неотвеченными с прошлых сессий.
+  Future<void> _checkPendingFeedback() async {
+    final auth = context.read<AuthState>();
+    if (!auth.isLoggedIn) return;
+    final client = auth.gqlClient.value;
+
+    final reqResult = await client.query(QueryOptions(
+      document: gql(GQLQueries.pendingFeedbackRequests),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted || reqResult.hasException) return;
+    final requests = (reqResult.data?['pendingFeedbackRequests'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>()
+        .where((r) => r['status'] == 'new')
+        .toList();
+    if (requests.isEmpty) return;
+
+    final loungesResult = await client.query(QueryOptions(
+      document: gql(GQLQueries.lounges),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted) return;
+    final lounges = {
+      for (final e in loungesResult.data?['lounges'] as List<dynamic>? ?? [])
+        (e as Map<String, dynamic>)['id'] as String: Lounge.fromJson(e),
+    };
+
+    final ordersResult = await client.query(QueryOptions(
+      document: gql(GQLQueries.orders),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted) return;
+    final orders = {
+      for (final e in ordersResult.data?['orders'] as List<dynamic>? ?? [])
+        (e as Map<String, dynamic>)['id'] as String: Order.fromJson(e),
+    };
+
+    for (final req in requests) {
+      if (!mounted) return;
+      final loungeId = req['loungeId'] as String? ?? '';
+      final orderId = req['orderId'] as String? ?? '';
+      final lounge = lounges[loungeId];
+      if (lounge == null) continue;
+      final order = orders[orderId];
+      final orderTime =
+          order?.arrivalAt != null ? _formatDateTime(order!.arrivalAt!) : null;
+
+      await showFeedbackSheet(
+        context,
+        client: client,
+        title: req['message'] as String? ?? 'Заказ завершён',
+        loungeName: lounge.name,
+        loungeId: lounge.id,
+        orderId: orderId,
+        orderTime: orderTime,
+        firstName: auth.firstName,
+        lastName: auth.lastName,
+      );
     }
   }
 

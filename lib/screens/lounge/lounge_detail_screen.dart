@@ -129,7 +129,7 @@ class _LoungeInfo extends StatelessWidget {
           const Text('Персонал',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...lounge.staff.map((s) => _StaffTile(staff: s)),
+          ...lounge.staff.map((s) => _StaffTile(staff: s, loungeId: lounge.id)),
         ],
 
         // ── Оценки и отзывы ──────────────────────────────────────────
@@ -279,8 +279,9 @@ class _OrderButton extends StatelessWidget {
 
 class _StaffTile extends StatefulWidget {
   final StaffMember staff;
+  final String loungeId;
 
-  const _StaffTile({required this.staff});
+  const _StaffTile({required this.staff, required this.loungeId});
 
   @override
   State<_StaffTile> createState() => _StaffTileState();
@@ -304,9 +305,15 @@ class _StaffTileState extends State<_StaffTile> {
     ));
     if (!mounted) return;
     final list = result.data?['staffSchedule'] as List<Object?>?;
-    final data = (list != null && list.isNotEmpty)
-        ? list.first as Map<String, dynamic>?
-        : null;
+    Map<String, dynamic>? data;
+    if (list != null) {
+      for (final entry in list.cast<Map<String, dynamic>>()) {
+        if (entry['loungeId'] == widget.loungeId) {
+          data = entry;
+          break;
+        }
+      }
+    }
     setState(() {
       _loading = false;
       if (data != null) {

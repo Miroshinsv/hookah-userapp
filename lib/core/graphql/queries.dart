@@ -135,6 +135,31 @@ class GQLQueries {
     }
   ''';
 
+  static String feedbackRequest(String orderId) => '''
+    query {
+      feedbackRequest(orderId: ${jsonEncode(orderId)}) {
+        requestId
+        orderId
+        loungeId
+        message
+        status
+      }
+    }
+  ''';
+
+  static const pendingFeedbackRequests = r'''
+    query {
+      pendingFeedbackRequests {
+        requestId
+        orderId
+        loungeId
+        message
+        status
+        createdAt
+      }
+    }
+  ''';
+
   static String comments(String entityType, String entityId) => '''
     query {
       comments(entityType: ${jsonEncode(entityType)}, entityId: ${jsonEncode(entityId)}) {
