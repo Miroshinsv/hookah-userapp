@@ -112,7 +112,7 @@ class _ProfileBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final roles = (profile['roles'] as List<dynamic>?)
             ?.map((e) => e as String)
-            .where((r) => r != 'owner')
+            .where((r) => r != 'owner' && r != 'deputy')
             .map((r) => _roleLabels[r] ?? r)
             .join(', ') ??
         '—';

@@ -44,9 +44,8 @@ class StaffMember {
     'owner': 'Владелец',
   };
 
-  // owner скрывается — пользователи не являются администраторами
   String get displayRoles {
-    final visible = roles.where((r) => r != 'owner').toList();
+    final visible = roles.where((r) => r != 'owner' && r != 'deputy').toList();
     if (visible.isEmpty) return '—';
     return visible.map((r) => _roleLabels[r] ?? r).join(', ');
   }
