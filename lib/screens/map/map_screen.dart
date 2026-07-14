@@ -36,6 +36,8 @@ class _MapScreenState extends State<MapScreen> {
   Map<String, Lounge>? _fullLoungeCache;
   bool _resolvingLounge = false;
 
+  int _reloadGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -106,10 +108,15 @@ class _MapScreenState extends State<MapScreen> {
     final target = _cameraTarget;
     if (target == null || !mounted) return;
 
+    // Debounced reloads can still overlap in flight (e.g. the user settles
+    // again before a slow request returns). Only the response matching the
+    // most recently issued request is allowed to update state, so a late,
+    // stale reply can never overwrite a newer viewport's results.
+    final generation = ++_reloadGeneration;
     final zoom = _cameraZoom.round();
     AppLogger.d(
       _kTag,
-      'reloading lounges for lat=${target.latitude} lng=${target.longitude} zoom=$zoom',
+      'reloading lounges (gen=$generation) for lat=${target.latitude} lng=${target.longitude} zoom=$zoom',
     );
     setState(() => _loading = true);
     try {
@@ -123,6 +130,10 @@ class _MapScreenState extends State<MapScreen> {
         fetchPolicy: FetchPolicy.networkOnly,
       ));
       if (!mounted) return;
+      if (generation != _reloadGeneration) {
+        AppLogger.d(_kTag, 'discarding stale reload (gen=$generation, current=$_reloadGeneration)');
+        return;
+      }
 
       if (result.hasException) {
         AppLogger.w(_kTag, 'loungesPage query failed', result.exception);
@@ -150,7 +161,7 @@ class _MapScreenState extends State<MapScreen> {
       });
     } catch (e, st) {
       AppLogger.e(_kTag, 'unexpected error reloading lounges', e, st);
-      if (!mounted) return;
+      if (!mounted || generation != _reloadGeneration) return;
       setState(() {
         _loading = false;
         _error = 'Не удалось обновить список заведений';
