@@ -6,9 +6,12 @@ import 'package:yandex_mapkit/yandex_mapkit.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
+import '../../core/utils/camera_move_debouncer.dart';
+import '../../core/utils/logger.dart';
 import '../../core/utils/schedule_parser.dart';
 
 const _kDefaultCenter = Point(latitude: 55.7558, longitude: 37.6173);
+const _kTag = 'MapScreen';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -22,6 +25,17 @@ class _MapScreenState extends State<MapScreen> {
   YandexMapController? _mapController;
   Point? _userLocation;
 
+  final _debouncer = CameraMoveDebouncer();
+  Point? _cameraTarget;
+  double _cameraZoom = 12;
+
+  List<LoungeMapItem> _lounges = [];
+  bool _loading = false;
+  String? _error;
+
+  Map<String, Lounge>? _fullLoungeCache;
+  bool _resolvingLounge = false;
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +44,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _debouncer.dispose();
     _mapController?.dispose();
     super.dispose();
   }
@@ -42,6 +57,10 @@ class _MapScreenState extends State<MapScreen> {
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
+        AppLogger.i(_kTag, 'location permission not granted — using default center');
+        _cameraTarget = _kDefaultCenter;
+        _cameraZoom = 12;
+        _reloadLounges();
         return;
       }
 
@@ -50,12 +69,134 @@ class _MapScreenState extends State<MapScreen> {
       );
       if (!mounted) return;
       final loc = Point(latitude: pos.latitude, longitude: pos.longitude);
+      AppLogger.i(_kTag, 'user location resolved: ${loc.latitude},${loc.longitude}');
       setState(() => _userLocation = loc);
       _mapController?.moveCamera(
         CameraUpdate.newCameraPosition(CameraPosition(target: loc, zoom: 14)),
         animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.5),
       );
-    } catch (_) {}
+      _cameraTarget = loc;
+      _cameraZoom = 14;
+      _reloadLounges();
+    } catch (e) {
+      AppLogger.w(_kTag, 'failed to resolve user location — using default center', e);
+      _cameraTarget = _kDefaultCenter;
+      _cameraZoom = 12;
+      _reloadLounges();
+    }
+  }
+
+  void _onCameraPositionChanged(
+    CameraPosition position,
+    CameraUpdateReason reason,
+    bool finished,
+  ) {
+    _cameraTarget = position.target;
+    _cameraZoom = position.zoom;
+    if (!finished) return;
+    AppLogger.d(
+      _kTag,
+      'camera settled at ${position.target.latitude},${position.target.longitude} '
+      'zoom=${position.zoom} reason=$reason',
+    );
+    _debouncer.schedule(_reloadLounges);
+  }
+
+  Future<void> _reloadLounges() async {
+    final target = _cameraTarget;
+    if (target == null || !mounted) return;
+
+    final zoom = _cameraZoom.round();
+    AppLogger.d(
+      _kTag,
+      'reloading lounges for lat=${target.latitude} lng=${target.longitude} zoom=$zoom',
+    );
+    setState(() => _loading = true);
+    try {
+      final client = context.read<AuthState>().gqlClient.value;
+      final result = await client.query(QueryOptions(
+        document: gql(GQLQueries.loungesPage(
+          latitude: target.latitude,
+          longitude: target.longitude,
+          zoom: zoom,
+        )),
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+      if (!mounted) return;
+
+      if (result.hasException) {
+        AppLogger.w(_kTag, 'loungesPage query failed', result.exception);
+        setState(() {
+          _loading = false;
+          _error = 'Не удалось обновить список заведений';
+        });
+        return;
+      }
+
+      final page = LoungesPageResult.fromJson(
+        result.data?['loungesPage'] as Map<String, dynamic>? ?? const {},
+      );
+      if (page.total > page.items.length) {
+        AppLogger.w(
+          _kTag,
+          'loungesPage returned ${page.items.length}/${page.total} — pagination not implemented for map pins',
+        );
+      }
+      AppLogger.i(_kTag, 'loaded ${page.items.length} lounges (total=${page.total})');
+      setState(() {
+        _lounges = page.items;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e, st) {
+      AppLogger.e(_kTag, 'unexpected error reloading lounges', e, st);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Не удалось обновить список заведений';
+      });
+    }
+  }
+
+  Future<Lounge?> _resolveFullLounge(String loungeId) async {
+    if (_fullLoungeCache == null) {
+      AppLogger.d(_kTag, 'full-lounge cache miss — fetching lounges list');
+      final client = context.read<AuthState>().gqlClient.value;
+      final result = await client.query(QueryOptions(
+        document: gql(GQLQueries.lounges),
+        fetchPolicy: FetchPolicy.cacheFirst,
+      ));
+      if (result.hasException) {
+        AppLogger.w(_kTag, 'failed to fetch full lounges list', result.exception);
+        return null;
+      }
+      final raw = result.data?['lounges'] as List<dynamic>? ?? [];
+      _fullLoungeCache = {
+        for (final e in raw)
+          (e as Map<String, dynamic>)['id'] as String: Lounge.fromJson(e),
+      };
+      AppLogger.d(_kTag, 'full-lounge cache populated with ${_fullLoungeCache!.length} entries');
+    }
+    final lounge = _fullLoungeCache![loungeId];
+    if (lounge == null) {
+      AppLogger.w(_kTag, 'lounge $loungeId not found in full-lounge cache');
+    }
+    return lounge;
+  }
+
+  Future<void> _onLoungeTapped(LoungeMapItem item) async {
+    if (_resolvingLounge) return;
+    setState(() => _resolvingLounge = true);
+    final lounge = await _resolveFullLounge(item.id);
+    if (!mounted) return;
+    setState(() => _resolvingLounge = false);
+    if (lounge == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Заведение недоступно')),
+      );
+      return;
+    }
+    _showLoungeSheet(lounge);
   }
 
   void _showLoungeSheet(Lounge lounge) {
@@ -71,79 +212,72 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Query(
-      options: QueryOptions(
-        document: gql(GQLQueries.lounges),
-        fetchPolicy: FetchPolicy.cacheAndNetwork,
-      ),
-      builder: (result, {fetchMore, refetch}) {
-        List<Lounge> lounges = [];
-        if (result.data != null) {
-          final raw = result.data!['lounges'] as List<dynamic>? ?? [];
-          lounges = raw
-              .map((e) => Lounge.fromJson(e as Map<String, dynamic>))
-              .toList();
-        }
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Hookah Order'),
-            actions: [
-              if (result.isLoading)
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-            ],
-          ),
-          body: _showList ? _buildList(lounges) : _buildMap(lounges),
-          floatingActionButton: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (!_showList && _userLocation != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: FloatingActionButton.small(
-                    heroTag: 'locate',
-                    onPressed: () => _mapController?.moveCamera(
-                      CameraUpdate.newCameraPosition(
-                        CameraPosition(target: _userLocation!, zoom: 14),
-                      ),
-                      animation: const MapAnimation(
-                          type: MapAnimationType.smooth, duration: 0.5),
-                    ),
-                    child: const Icon(Icons.my_location),
-                  ),
-                ),
-              FloatingActionButton.extended(
-                heroTag: 'toggle',
-                onPressed: () => setState(() => _showList = !_showList),
-                icon: Icon(_showList ? Icons.map : Icons.list),
-                label: Text(_showList ? 'Карта' : 'Список'),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Hookah Order'),
+        actions: [
+          if (_loading || _resolvingLounge)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
-            ],
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_error != null)
+            Container(
+              width: double.infinity,
+              color: Colors.red.withValues(alpha: 0.1),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+            ),
+          Expanded(child: _showList ? _buildList(_lounges) : _buildMap(_lounges)),
+        ],
+      ),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!_showList && _userLocation != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: FloatingActionButton.small(
+                heroTag: 'locate',
+                onPressed: () => _mapController?.moveCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(target: _userLocation!, zoom: 14),
+                  ),
+                  animation: const MapAnimation(
+                      type: MapAnimationType.smooth, duration: 0.5),
+                ),
+                child: const Icon(Icons.my_location),
+              ),
+            ),
+          FloatingActionButton.extended(
+            heroTag: 'toggle',
+            onPressed: () => setState(() => _showList = !_showList),
+            icon: Icon(_showList ? Icons.map : Icons.list),
+            label: Text(_showList ? 'Карта' : 'Список'),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 
-  Widget _buildMap(List<Lounge> lounges) {
+  Widget _buildMap(List<LoungeMapItem> lounges) {
     final valid =
         lounges.where((l) => l.latitude != 0 || l.longitude != 0).toList();
-    final initialCenter = valid.isNotEmpty
-        ? Point(latitude: valid.first.latitude, longitude: valid.first.longitude)
-        : _kDefaultCenter;
+    final initialCenter = _userLocation ?? _kDefaultCenter;
 
     final mapObjects = <MapObject>[
       // маркеры кальянных
       ...valid.map(
         (l) => PlacemarkMapObject(
-          opacity: (l.ownerUserId != null && l.ownerUserId!.isNotEmpty) ? 1.0 : 0.6,
+          opacity: l.status == 'closed' ? 0.6 : 1.0,
           mapId: MapObjectId('lounge_${l.id}'),
           point: Point(latitude: l.latitude, longitude: l.longitude),
           icon: PlacemarkIcon.single(
@@ -152,7 +286,7 @@ class _MapScreenState extends State<MapScreen> {
               scale: 0.15,
             ),
           ),
-          onTap: (_, __) => _showLoungeSheet(l),
+          onTap: (_, __) => _onLoungeTapped(l),
         ),
       ),
       // маркер пользователя
@@ -178,11 +312,12 @@ class _MapScreenState extends State<MapScreen> {
           ),
         );
       },
+      onCameraPositionChanged: _onCameraPositionChanged,
       mapObjects: mapObjects,
     );
   }
 
-  Widget _buildList(List<Lounge> lounges) {
+  Widget _buildList(List<LoungeMapItem> lounges) {
     if (lounges.isEmpty) {
       return const Center(
           child: Text('Кальянные не найдены',
@@ -210,7 +345,7 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 )
               : null,
-          onTap: () => _showLoungeSheet(l),
+          onTap: () => _onLoungeTapped(l),
         );
       },
     );
