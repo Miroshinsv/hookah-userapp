@@ -53,7 +53,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
     final staff = ModalRoute.of(context)!.settings.arguments as StaffMember;
     return Scaffold(
       appBar: AppBar(
-        title: Text('${staff.firstName} ${staff.lastName}'),
+        title: Text(staff.displayRoles),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -119,10 +119,6 @@ class _ProfileBody extends StatelessWidget {
     final bio = profile['bio'] as String?;
     final rating = (profile['rating'] as num?)?.toDouble();
     final photoUrl = profile['photoUrl'] as String?;
-    final firstName =
-        profile['firstName'] as String? ?? staff.firstName;
-    final lastName =
-        profile['lastName'] as String? ?? staff.lastName;
     final lounges = (profile['lounges'] as List<dynamic>?)
             ?.map((l) => l as Map<String, dynamic>)
             .toList() ??
@@ -153,21 +149,10 @@ class _ProfileBody extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  '$firstName $lastName',
+                  roles,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                       fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  roles,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withAlpha(153),
-                      fontSize: 14),
                 ),
               ],
             ),

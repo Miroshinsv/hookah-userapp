@@ -361,7 +361,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final request = result.data?['feedbackRequest'] as Map<String, dynamic>?;
     if (request == null || request['status'] != 'new') return;
 
-    final auth = context.read<AuthState>();
     final orderTime = _order.arrivalAt != null
         ? _formatDateTime(_order.arrivalAt!)
         : null;
@@ -373,8 +372,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       loungeId: _lounge!.id,
       orderId: _order.id,
       orderTime: orderTime,
-      firstName: auth.firstName,
-      lastName: auth.lastName,
     );
   }
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class TableItem {
   final String tableId;
   final String loungeId;
@@ -27,9 +29,20 @@ class TableItem {
         rotation: (json['rotation'] as num?)?.toDouble() ?? 0.0,
         seats: (json['seats'] as num?)?.toInt() ?? 0,
         label: json['label'] as String?,
-        properties: (json['properties'] as List<dynamic>?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            const [],
+        properties: _parseProperties(json['properties']),
       );
+
+  // Бэкенд отдаёт `properties` как String (gql.String в схеме), содержащий
+  // JSON-массив свойств (например '["tv","playstation"]"), а не как настоящий
+  // GraphQL-список — распаковываем вручную.
+  static List<String> _parseProperties(Object? raw) {
+    if (raw is! String || raw.isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return decoded.map((e) => e.toString()).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
 }

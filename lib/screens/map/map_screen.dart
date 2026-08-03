@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -12,6 +15,18 @@ import '../../core/utils/schedule_parser.dart';
 
 const _kDefaultCenter = Point(latitude: 55.7558, longitude: 37.6173);
 const _kTag = 'MapScreen';
+
+// Цвета кластера — дублируют акценты темы (main.dart), не импортируем main.dart
+// напрямую, чтобы не создавать циклический импорт (main.dart уже импортирует этот файл).
+const _kClusterAccent = Color(0xFFC9A84C);
+const _kClusterFill = Color(0xFF1A0E05);
+
+// Группировка маркеров на стороне Dart (не через нативный
+// ClusterizedPlacemarkCollection — тот всё равно материализует все 700+
+// отдельных PlacemarkMapObject на native-стороне, что и приводило к
+// OOM-краху: lmkd убивал процесс за ~2.6GB RSS). Здесь на карту передаётся
+// уже агрегированный, маленький список объектов.
+const _kClusterThreshold = 10;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -30,11 +45,15 @@ class _MapScreenState extends State<MapScreen> {
   double _cameraZoom = 12;
 
   List<LoungeMapItem> _lounges = [];
+  List<MapObject> _loungeMapObjects = [];
   bool _loading = false;
   String? _error;
 
   Map<String, Lounge>? _fullLoungeCache;
   bool _resolvingLounge = false;
+
+  final Map<int, BitmapDescriptor> _clusterIconCache = {};
+  BitmapDescriptor? _markerIcon;
 
   int _reloadGeneration = 0;
 
@@ -154,8 +173,16 @@ class _MapScreenState extends State<MapScreen> {
         );
       }
       AppLogger.i(_kTag, 'loaded ${page.items.length} lounges (total=${page.total})');
+
+      // Собираем и кластеризуем маркеры целиком до первого setState — экран
+      // должен один раз показать уже готовую, агрегированную карту, а не
+      // мигать промежуточными состояниями с частично построенными объектами.
+      final objects = await _buildLoungeMapObjects(page.items);
+      if (!mounted || generation != _reloadGeneration) return;
+
       setState(() {
         _lounges = page.items;
+        _loungeMapObjects = objects;
         _loading = false;
         _error = null;
       });
@@ -247,7 +274,7 @@ class _MapScreenState extends State<MapScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(_error!, style: const TextStyle(color: Colors.red)),
             ),
-          Expanded(child: _showList ? _buildList(_lounges) : _buildMap(_lounges)),
+          Expanded(child: _showList ? _buildList(_lounges) : _buildMap()),
         ],
       ),
       floatingActionButton: Column(
@@ -279,27 +306,135 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildMap(List<LoungeMapItem> lounges) {
+  // Строит финальный список объектов карты (одиночные маркеры + агрегированные
+  // кластеры) целиком, включая асинхронную генерацию недостающих иконок
+  // кластеров, ДО того как результат попадёт в setState — карта должна
+  // получить готовый список объектов один раз, а не строиться поэтапно.
+  Future<List<MapObject>> _buildLoungeMapObjects(
+    List<LoungeMapItem> lounges,
+  ) async {
     final valid =
         lounges.where((l) => l.latitude != 0 || l.longitude != 0).toList();
+
+    if (valid.length <= _kClusterThreshold) {
+      return valid.map(_buildLoungePlacemark).toList();
+    }
+
+    // Простая grid-кластеризация: ячейка сетки в градусах привязана к
+    // текущему zoom, чтобы кластеры визуально выглядели разумно и на уровне
+    // города, и при приближении к району.
+    final cellSize = 360 / math.pow(2, _cameraZoom) / 3;
+    final groups = <String, List<LoungeMapItem>>{};
+    for (final l in valid) {
+      final key =
+          '${(l.latitude / cellSize).round()}_${(l.longitude / cellSize).round()}';
+      groups.putIfAbsent(key, () => []).add(l);
+    }
+
+    AppLogger.d(
+      _kTag,
+      'clustered ${valid.length} lounges into ${groups.length} map objects '
+      '(zoom=$_cameraZoom cellSize=$cellSize)',
+    );
+
+    final result = <MapObject>[];
+    for (final group in groups.values) {
+      if (group.length == 1) {
+        result.add(_buildLoungePlacemark(group.first));
+        continue;
+      }
+      final avgLat = group.map((l) => l.latitude).reduce((a, b) => a + b) / group.length;
+      final avgLng = group.map((l) => l.longitude).reduce((a, b) => a + b) / group.length;
+      final point = Point(latitude: avgLat, longitude: avgLng);
+      final icon = await _clusterIcon(group.length);
+      result.add(PlacemarkMapObject(
+        mapId: MapObjectId('cluster_${point.latitude}_${point.longitude}_${group.length}'),
+        point: point,
+        icon: PlacemarkIcon.single(PlacemarkIconStyle(image: icon, scale: 1)),
+        onTap: (_, __) => _onClusterTapped(point),
+      ));
+    }
+    return result;
+  }
+
+  PlacemarkMapObject _buildLoungePlacemark(LoungeMapItem l) {
+    return PlacemarkMapObject(
+      opacity: l.status == 'closed' ? 0.6 : 1.0,
+      mapId: MapObjectId('lounge_${l.id}'),
+      point: Point(latitude: l.latitude, longitude: l.longitude),
+      icon: PlacemarkIcon.single(
+        PlacemarkIconStyle(
+          image: _markerIcon ??= BitmapDescriptor.fromAssetImage('assets/marker.png'),
+          scale: 0.15,
+        ),
+      ),
+      onTap: (_, __) => _onLoungeTapped(l),
+    );
+  }
+
+  Future<BitmapDescriptor> _clusterIcon(int size) async {
+    final cached = _clusterIconCache[size];
+    if (cached != null) return cached;
+
+    final radius = size < 10 ? 40.0 : (size < 100 ? 55.0 : 70.0);
+    final canvasSize = radius * 2 + 16;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final center = Offset(canvasSize / 2, canvasSize / 2);
+
+    // Непрозрачная тёмная заливка (в цвет обычного маркера кальянной) —
+    // белая заливка сливалась со светлым фоном карты и была почти не видна.
+    canvas.drawCircle(center, radius, Paint()..color = _kClusterFill);
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = _kClusterAccent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6,
+    );
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: '$size',
+        style: TextStyle(
+          color: _kClusterAccent,
+          fontSize: radius * 0.55,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    textPainter.paint(
+      canvas,
+      center - Offset(textPainter.width / 2, textPainter.height / 2),
+    );
+
+    final image = await recorder
+        .endRecording()
+        .toImage(canvasSize.toInt(), canvasSize.toInt());
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final icon = BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+    _clusterIconCache[size] = icon;
+    return icon;
+  }
+
+  void _onClusterTapped(Point point) {
+    AppLogger.d(_kTag, 'cluster tapped at ${point.latitude},${point.longitude}');
+    _mapController?.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: point, zoom: _cameraZoom + 2),
+      ),
+      animation: const MapAnimation(type: MapAnimationType.smooth, duration: 0.4),
+    );
+  }
+
+  Widget _buildMap() {
     final initialCenter = _userLocation ?? _kDefaultCenter;
 
     final mapObjects = <MapObject>[
-      // маркеры кальянных
-      ...valid.map(
-        (l) => PlacemarkMapObject(
-          opacity: l.status == 'closed' ? 0.6 : 1.0,
-          mapId: MapObjectId('lounge_${l.id}'),
-          point: Point(latitude: l.latitude, longitude: l.longitude),
-          icon: PlacemarkIcon.single(
-            PlacemarkIconStyle(
-              image: BitmapDescriptor.fromAssetImage('assets/marker.png'),
-              scale: 0.15,
-            ),
-          ),
-          onTap: (_, __) => _onLoungeTapped(l),
-        ),
-      ),
+      ..._loungeMapObjects,
       // маркер пользователя
       if (_userLocation != null)
         PlacemarkMapObject(

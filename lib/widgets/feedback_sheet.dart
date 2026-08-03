@@ -11,8 +11,6 @@ Future<void> showFeedbackSheet(
   required String loungeId,
   required String orderId,
   String? orderTime,
-  String? firstName,
-  String? lastName,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -30,8 +28,6 @@ Future<void> showFeedbackSheet(
       loungeId: loungeId,
       orderId: orderId,
       orderTime: orderTime,
-      firstName: firstName,
-      lastName: lastName,
     ),
   );
 }
@@ -43,8 +39,6 @@ class FeedbackSheet extends StatefulWidget {
   final String loungeId;
   final String orderId;
   final String? orderTime;
-  final String? firstName;
-  final String? lastName;
 
   const FeedbackSheet({
     super.key,
@@ -54,8 +48,6 @@ class FeedbackSheet extends StatefulWidget {
     required this.loungeId,
     required this.orderId,
     this.orderTime,
-    this.firstName,
-    this.lastName,
   });
 
   @override
@@ -95,8 +87,6 @@ class _FeedbackSheetState extends State<FeedbackSheet> {
         loungeId: widget.loungeId,
         score: _selectedScore,
         comment: comment.isEmpty ? null : comment,
-        firstName: widget.firstName,
-        lastName: widget.lastName,
       )),
     ));
 

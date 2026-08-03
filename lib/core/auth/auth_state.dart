@@ -17,8 +17,6 @@ class AuthState extends ChangeNotifier {
   String? _role;
   String? _loungeId;
   String? _staffId;
-  String? _firstName;
-  String? _lastName;
 
   AuthState() {
     gqlClient = ValueNotifier(_buildClient(null));
@@ -33,8 +31,6 @@ class AuthState extends ChangeNotifier {
   String? get role => _role;
   String? get loungeId => _loungeId;
   String? get staffId => _staffId;
-  String? get firstName => _firstName;
-  String? get lastName => _lastName;
 
   static const _tag = 'Auth';
 
@@ -42,10 +38,10 @@ class AuthState extends ChangeNotifier {
     final token = await _storage.readToken();
     if (token != null && !JwtHelper.isExpired(token)) {
       _token     = token;
-      _phone     = JwtHelper.getPhone(token);
+      // Токен больше не хранит настоящий номер (sub — server-side hash) —
+      // читаем реальный телефон, сохранённый локально при login()/register().
+      _phone     = await _storage.readPhone();
       _staffId   = await _storage.readStaffId();
-      _firstName = await _storage.readFirstName();
-      _lastName  = await _storage.readLastName();
       gqlClient.value = _buildClient(token, onUnauthenticated: _handleUnauthenticated);
       AppLogger.i(_tag, 'restored session phone=$_phone');
       notifyListeners();
@@ -63,28 +59,20 @@ class AuthState extends ChangeNotifier {
 
   Future<void> login(
     String token, {
+    required String phone,
     String? role,
     String? loungeId,
     String? staffId,
-    String? firstName,
-    String? lastName,
   }) async {
     await _storage.writeToken(token);
+    await _storage.writePhone(phone);
     _token    = token;
-    _phone    = JwtHelper.getPhone(token);
+    _phone    = phone;
     _role     = role;
     _loungeId = loungeId;
     if (staffId != null) {
       _staffId = staffId;
       await _storage.writeStaffId(staffId);
-    }
-    if (firstName != null) {
-      _firstName = firstName.isEmpty ? null : firstName;
-      await _storage.writeFirstName(firstName);
-    }
-    if (lastName != null) {
-      _lastName = lastName.isEmpty ? null : lastName;
-      await _storage.writeLastName(lastName);
     }
     gqlClient.value = _buildClient(token, onUnauthenticated: _handleUnauthenticated);
     AppLogger.i(_tag, 'login phone=$_phone role=$_role');
@@ -126,47 +114,30 @@ class AuthState extends ChangeNotifier {
       final me = result.data!['me'] as Map<String, dynamic>?;
       if (me == null) return;
 
-      final staffId   = me['id'] as String?;
-      final firstName = me['firstName'] as String?;
-      final lastName  = me['lastName'] as String?;
-
+      final staffId = me['id'] as String?;
       if (staffId != null) {
         _staffId = staffId;
         await _storage.writeStaffId(staffId);
       }
-      _firstName = (firstName?.isEmpty ?? true) ? null : firstName;
-      _lastName  = (lastName?.isEmpty ?? true) ? null : lastName;
-      await _storage.writeFirstName(_firstName ?? '');
-      await _storage.writeLastName(_lastName ?? '');
 
-      AppLogger.i(_tag, 'fetchMe ok firstName=$_firstName lastName=$_lastName');
+      AppLogger.i(_tag, 'fetchMe ok staffId=$_staffId');
       notifyListeners();
     } catch (e, stack) {
       AppLogger.w(_tag, 'fetchMe failed', e, stack);
     }
   }
 
-  Future<void> updateProfile({String? firstName, String? lastName}) async {
-    _firstName = firstName?.isEmpty == true ? null : firstName;
-    _lastName  = lastName?.isEmpty == true ? null : lastName;
-    await _storage.writeFirstName(_firstName ?? '');
-    await _storage.writeLastName(_lastName ?? '');
-    AppLogger.i(_tag, 'profile updated firstName=$_firstName lastName=$_lastName');
-    notifyListeners();
-  }
-
   Future<void> logout() async {
     AppLogger.i(_tag, 'logout phone=$_phone');
     await _unregisterDeviceBestEffort();
     await _storage.deleteToken();
-    await _storage.deleteNames();
+    await _storage.deleteStaffId();
+    await _storage.deletePhone();
     _token     = null;
     _phone     = null;
     _role      = null;
     _loungeId  = null;
     _staffId   = null;
-    _firstName = null;
-    _lastName  = null;
     gqlClient.value = _buildClient(null);
     notifyListeners();
   }

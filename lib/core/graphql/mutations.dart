@@ -1,18 +1,22 @@
 import 'dart:convert';
 
 class GQLMutations {
-  static String registerUser(
-    String phone,
-    String password, {
-    String? firstName,
-    String? lastName,
+  // Бэкенд больше не принимает номер телефона в открытом виде для этих
+  // мутаций — phoneHash/phoneLast4/phoneMock вычисляются на клиенте через
+  // core/utils/phone_hash.dart (PhoneHash), сервер сам домешивает секретный
+  // pepper при выводе identity-ключа.
+  static String registerUser({
+    required String phoneHash,
+    required String phoneLast4,
+    required String phoneMock,
+    required String password,
   }) => '''
     mutation {
       registerUser(
-        phone: ${jsonEncode(phone)}
+        phoneHash: ${jsonEncode(phoneHash)}
+        phoneLast4: ${jsonEncode(phoneLast4)}
+        phoneMock: ${jsonEncode(phoneMock)}
         password: ${jsonEncode(password)}
-        ${firstName != null && firstName.isNotEmpty ? 'firstName: ${jsonEncode(firstName)}' : ''}
-        ${lastName != null && lastName.isNotEmpty ? 'lastName: ${jsonEncode(lastName)}' : ''}
       ) {
         token
         role
@@ -20,9 +24,9 @@ class GQLMutations {
     }
   ''';
 
-  static String loginUser(String phone, String password) => '''
+  static String loginUser({required String phoneHash, required String password}) => '''
     mutation {
-      loginUser(phone: ${jsonEncode(phone)}, password: ${jsonEncode(password)}) {
+      loginUser(phoneHash: ${jsonEncode(phoneHash)}, password: ${jsonEncode(password)}) {
         token
         role
         loungeId
@@ -34,9 +38,8 @@ class GQLMutations {
     required String loungeId,
     required String flavor,
     String? comment,
-    required String phone,
-    String? firstName,
-    String? lastName,
+    required String phoneLast4,
+    required String phoneMock,
     required String arrivalAt,
   }) => '''
     mutation {
@@ -44,30 +47,12 @@ class GQLMutations {
         loungeId: ${jsonEncode(loungeId)}
         flavor: ${jsonEncode(flavor)}
         ${comment != null ? 'comment: ${jsonEncode(comment)}' : ''}
-        phone: ${jsonEncode(phone)}
-        ${firstName != null && firstName.isNotEmpty ? 'firstName: ${jsonEncode(firstName)}' : ''}
-        ${lastName != null && lastName.isNotEmpty ? 'lastName: ${jsonEncode(lastName)}' : ''}
+        phoneLast4: ${jsonEncode(phoneLast4)}
+        phoneMock: ${jsonEncode(phoneMock)}
         arrivalAt: ${jsonEncode(arrivalAt)}
       ) {
         id
         status
-      }
-    }
-  ''';
-
-  static String updateUser({
-    required String staffId,
-    String? firstName,
-    String? lastName,
-  }) => '''
-    mutation {
-      updateStaff(
-        staffId: ${jsonEncode(staffId)}
-        ${firstName != null ? 'firstName: ${jsonEncode(firstName)}' : ''}
-        ${lastName != null ? 'lastName: ${jsonEncode(lastName)}' : ''}
-      ) {
-        firstName
-        lastName
       }
     }
   ''';
@@ -130,8 +115,6 @@ class GQLMutations {
     required String loungeId,
     required int score,
     String? comment,
-    String? firstName,
-    String? lastName,
   }) => '''
     mutation {
       submitFeedback(
@@ -139,8 +122,6 @@ class GQLMutations {
         loungeId: ${jsonEncode(loungeId)}
         score: $score
         ${comment != null ? 'comment: ${jsonEncode(comment)}' : ''}
-        ${firstName != null && firstName.isNotEmpty ? 'firstName: ${jsonEncode(firstName)}' : ''}
-        ${lastName != null && lastName.isNotEmpty ? 'lastName: ${jsonEncode(lastName)}' : ''}
       ) {
         feedbackId
       }

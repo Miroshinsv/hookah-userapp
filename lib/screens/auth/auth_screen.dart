@@ -4,6 +4,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/mutations.dart';
+import '../../core/utils/phone_hash.dart';
 
 class _RuPhoneFormatter extends TextInputFormatter {
   @override
@@ -52,56 +53,54 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final _loginPhoneCtrl    = TextEditingController();
-  final _loginPassCtrl     = TextEditingController();
-  final _regPhoneCtrl      = TextEditingController();
-  final _regPassCtrl       = TextEditingController();
-  final _regFirstNameCtrl  = TextEditingController();
-  final _regLastNameCtrl   = TextEditingController();
+class _AuthScreenState extends State<AuthScreen> {
+  final _phoneCtrl        = TextEditingController();
+  final _passCtrl         = TextEditingController();
+  final _confirmPassCtrl  = TextEditingController();
+  bool _isRegisterMode = false;
   String? _error;
   bool _loading = false;
 
-  String _rawPhoneFrom(TextEditingController ctrl) {
-    final digits = ctrl.text.replaceAll(RegExp(r'[^\d]'), '');
+  String get _rawPhone {
+    final digits = _phoneCtrl.text.replaceAll(RegExp(r'[^\d]'), '');
     return '+$digits';
   }
 
-  bool _phoneComplete(TextEditingController ctrl) =>
-      ctrl.text.replaceAll(RegExp(r'[^\d]'), '').length == 11;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
+  bool get _phoneComplete =>
+      _phoneCtrl.text.replaceAll(RegExp(r'[^\d]'), '').length == 11;
 
   @override
   void dispose() {
-    _tabController.dispose();
-    _loginPhoneCtrl.dispose();
-    _loginPassCtrl.dispose();
-    _regPhoneCtrl.dispose();
-    _regPassCtrl.dispose();
-    _regFirstNameCtrl.dispose();
-    _regLastNameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _passCtrl.dispose();
+    _confirmPassCtrl.dispose();
     super.dispose();
   }
 
   GraphQLClient get _client => GraphQLProvider.of(context).value;
 
+  void _toggleMode(bool registerMode) {
+    setState(() {
+      _isRegisterMode = registerMode;
+      _error = null;
+      _confirmPassCtrl.clear();
+    });
+  }
+
+  Future<void> _submit() =>
+      _isRegisterMode ? _register() : _login();
+
   Future<void> _login() async {
-    if (!_phoneComplete(_loginPhoneCtrl)) {
+    if (!_phoneComplete) {
       setState(() => _error = 'Введите полный номер телефона');
       return;
     }
     setState(() { _error = null; _loading = true; });
+    final phone = _rawPhone;
     final result = await _client.mutate(MutationOptions(
       document: gql(GQLMutations.loginUser(
-        _rawPhoneFrom(_loginPhoneCtrl),
-        _loginPassCtrl.text,
+        phoneHash: PhoneHash.sha256Hex(phone),
+        password: _passCtrl.text,
       )),
     ));
     if (!mounted) return;
@@ -119,6 +118,7 @@ class _AuthScreenState extends State<AuthScreen>
     if (token != null) {
       await context.read<AuthState>().login(
         token,
+        phone:    phone,
         role:     payload?['role'] as String?,
         loungeId: payload?['loungeId'] as String?,
       );
@@ -131,17 +131,22 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _register() async {
-    if (!_phoneComplete(_regPhoneCtrl)) {
+    if (!_phoneComplete) {
       setState(() => _error = 'Введите полный номер телефона');
       return;
     }
+    if (_passCtrl.text != _confirmPassCtrl.text) {
+      setState(() => _error = 'Пароли не совпадают');
+      return;
+    }
     setState(() { _error = null; _loading = true; });
+    final phone = _rawPhone;
     final result = await _client.mutate(MutationOptions(
       document: gql(GQLMutations.registerUser(
-        _rawPhoneFrom(_regPhoneCtrl),
-        _regPassCtrl.text,
-        firstName: _regFirstNameCtrl.text.trim().isEmpty ? null : _regFirstNameCtrl.text.trim(),
-        lastName: _regLastNameCtrl.text.trim().isEmpty ? null : _regLastNameCtrl.text.trim(),
+        phoneHash: PhoneHash.sha256Hex(phone),
+        phoneLast4: PhoneHash.last4(phone),
+        phoneMock: PhoneHash.mock(phone),
+        password: _passCtrl.text,
       )),
     ));
     if (!mounted) return;
@@ -157,11 +162,7 @@ class _AuthScreenState extends State<AuthScreen>
     final regPayload = result.data?['registerUser'] as Map<String, dynamic>?;
     final token = regPayload?['token'] as String?;
     if (token != null) {
-      await context.read<AuthState>().login(
-        token,
-        firstName: _regFirstNameCtrl.text.trim().isEmpty ? null : _regFirstNameCtrl.text.trim(),
-        lastName:  _regLastNameCtrl.text.trim().isEmpty ? null : _regLastNameCtrl.text.trim(),
-      );
+      await context.read<AuthState>().login(token, phone: phone);
       if (mounted && !widget.embedded) {
         Navigator.pushReplacementNamed(context, '/main');
       }
@@ -170,149 +171,90 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
-  Widget _buildLoginTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 8),
-          TextField(
-            controller: _loginPhoneCtrl,
-            keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.next,
-            inputFormatters: [_RuPhoneFormatter()],
-            decoration: const InputDecoration(
-              labelText: 'Телефон',
-              hintText: '+7 (999) 123-45-67',
-              prefixIcon: Icon(Icons.phone),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _loginPassCtrl,
-            obscureText: true,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _loading ? null : _login(),
-            decoration: const InputDecoration(
-              labelText: 'Пароль',
-              prefixIcon: Icon(Icons.lock_outline),
-            ),
-          ),
-          if (_error != null && _tabController.index == 0) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
-          ],
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _loading ? null : _login,
-            child: _loading
-                ? const SizedBox(height: 20, width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Войти'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRegisterTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 8),
-          TextField(
-            controller: _regPhoneCtrl,
-            keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.next,
-            inputFormatters: [_RuPhoneFormatter()],
-            decoration: const InputDecoration(
-              labelText: 'Телефон',
-              hintText: '+7 (999) 123-45-67',
-              prefixIcon: Icon(Icons.phone),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _regPassCtrl,
-            obscureText: true,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Пароль',
-              prefixIcon: Icon(Icons.lock_outline),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _regFirstNameCtrl,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              labelText: 'Имя',
-              prefixIcon: Icon(Icons.person_outline),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _regLastNameCtrl,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _loading ? null : _register(),
-            decoration: const InputDecoration(
-              labelText: 'Фамилия',
-              prefixIcon: Icon(Icons.person_outline),
-            ),
-          ),
-          if (_error != null && _tabController.index == 1) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
-          ],
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _loading ? null : _register,
-            child: _loading
-                ? const SizedBox(height: 20, width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Зарегистрироваться'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 40),
-            ClipOval(
-              child: Image.asset('assets/logo.png', width: 72, height: 72,
-                  fit: BoxFit.cover),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'HOOKAH ORDER',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 3,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24),
+              Center(
+                child: ClipOval(
+                  child: Image.asset('assets/logo.png', width: 72, height: 72,
+                      fit: BoxFit.cover),
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            TabBar(
-              controller: _tabController,
-              tabs: const [Tab(text: 'Вход'), Tab(text: 'Регистрация')],
-              onTap: (_) => setState(() => _error = null),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [_buildLoginTab(), _buildRegisterTab()],
+              const SizedBox(height: 12),
+              const Text(
+                'HOOKAH ORDER',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 3,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 32),
+              TextField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                inputFormatters: [_RuPhoneFormatter()],
+                decoration: const InputDecoration(
+                  labelText: 'Телефон',
+                  hintText: '+7 (999) 123-45-67',
+                  prefixIcon: Icon(Icons.phone),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passCtrl,
+                obscureText: true,
+                textInputAction:
+                    _isRegisterMode ? TextInputAction.next : TextInputAction.done,
+                onSubmitted: (_) => _isRegisterMode || _loading ? null : _submit(),
+                decoration: const InputDecoration(
+                  labelText: 'Пароль',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+              if (_isRegisterMode) ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _confirmPassCtrl,
+                  obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _loading ? null : _submit(),
+                  decoration: const InputDecoration(
+                    labelText: 'Повторите пароль',
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+              ],
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loading ? null : _submit,
+                child: _loading
+                    ? const SizedBox(height: 20, width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(_isRegisterMode ? 'Зарегистрироваться' : 'Войти'),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Зарегистрироваться'),
+                value: _isRegisterMode,
+                onChanged: _loading ? null : _toggleMode,
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );

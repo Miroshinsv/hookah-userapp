@@ -5,6 +5,7 @@ import '../../core/auth/auth_state.dart';
 import '../../core/graphql/mutations.dart';
 import '../../core/models/lounge.dart';
 import '../../core/models/order.dart';
+import '../../core/utils/phone_hash.dart';
 
 class NewOrderScreen extends StatefulWidget {
   const NewOrderScreen({super.key});
@@ -91,16 +92,16 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     setState(() => _loading = true);
 
     final auth = context.read<AuthState>();
+    final phone = auth.phone ?? '';
     final client = GraphQLProvider.of(context).value;
     final result = await client.mutate(MutationOptions(
       document: gql(GQLMutations.createOrder(
-        loungeId:  lounge.id,
-        flavor:    _flavorCtrl.text.trim(),
-        comment:   _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
-        phone:     auth.phone ?? '',
-        firstName: auth.firstName,
-        lastName:  auth.lastName,
-        arrivalAt: _arrivalAt!.toUtc().toIso8601String(),
+        loungeId:   lounge.id,
+        flavor:     _flavorCtrl.text.trim(),
+        comment:    _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
+        phoneLast4: PhoneHash.last4(phone),
+        phoneMock:  PhoneHash.mock(phone),
+        arrivalAt:  _arrivalAt!.toUtc().toIso8601String(),
       )),
     ));
 

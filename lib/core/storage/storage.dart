@@ -3,8 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class AppStorage {
   static const _jwtKey       = 'jwt';
   static const _staffIdKey   = 'staffId';
-  static const _firstNameKey = 'firstName';
-  static const _lastNameKey  = 'lastName';
+  static const _phoneKey     = 'phone';
 
   final _storage = const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -18,15 +17,11 @@ class AppStorage {
   Future<void> writeStaffId(String v) => _storage.write(key: _staffIdKey, value: v);
   Future<void> deleteStaffId() => _storage.delete(key: _staffIdKey);
 
-  Future<String?> readFirstName() => _storage.read(key: _firstNameKey);
-  Future<String?> readLastName()  => _storage.read(key: _lastNameKey);
-
-  Future<void> writeFirstName(String v) => _storage.write(key: _firstNameKey, value: v);
-  Future<void> writeLastName(String v)  => _storage.write(key: _lastNameKey, value: v);
-
-  Future<void> deleteNames() async {
-    await _storage.delete(key: _firstNameKey);
-    await _storage.delete(key: _lastNameKey);
-    await _storage.delete(key: _staffIdKey);
-  }
+  // Токен больше не содержит номер телефона в открытом виде (sub — это
+  // server-side identity hash), поэтому реальный номер сохраняется отдельно
+  // на клиенте при login/register, чтобы его можно было показать в профиле
+  // и пересчитать phoneLast4/phoneMock для createOrder при восстановлении сессии.
+  Future<String?> readPhone() => _storage.read(key: _phoneKey);
+  Future<void> writePhone(String v) => _storage.write(key: _phoneKey, value: v);
+  Future<void> deletePhone() => _storage.delete(key: _phoneKey);
 }

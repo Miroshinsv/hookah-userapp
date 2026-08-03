@@ -6,8 +6,6 @@ class GQLQueries {
       me {
         id
         userId
-        firstName
-        lastName
         roles
       }
     }
@@ -34,8 +32,6 @@ class GQLQueries {
         }
         staff {
           id
-          firstName
-          lastName
           roles
           photoUrl
         }
@@ -97,8 +93,6 @@ class GQLQueries {
         flavor
         comment
         phone
-        firstName
-        lastName
         arrivalAt
         status
         createdAt
@@ -146,8 +140,6 @@ class GQLQueries {
       staffProfile(staffId: ${jsonEncode(staffId)}) {
         id
         userId
-        firstName
-        lastName
         bio
         photoUrl
         roles

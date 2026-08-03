@@ -12,23 +12,17 @@ class LoungePhoto {
 
 class StaffMember {
   final String id;
-  final String firstName;
-  final String lastName;
   final List<String> roles;
   final String? photoUrl;
 
   const StaffMember({
     required this.id,
-    required this.firstName,
-    required this.lastName,
     required this.roles,
     this.photoUrl,
   });
 
   factory StaffMember.fromJson(Map<String, dynamic> json) => StaffMember(
         id: json['id'] as String? ?? '',
-        firstName: json['firstName'] as String? ?? '',
-        lastName: json['lastName'] as String? ?? '',
         roles: (json['roles'] as List<dynamic>?)
                 ?.map((e) => e as String)
                 .toList() ??

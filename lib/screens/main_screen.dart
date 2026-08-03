@@ -107,8 +107,6 @@ class _MainScreenState extends State<MainScreen> {
         loungeId: lounge.id,
         orderId: orderId,
         orderTime: orderTime,
-        firstName: auth.firstName,
-        lastName: auth.lastName,
       );
     }
   }

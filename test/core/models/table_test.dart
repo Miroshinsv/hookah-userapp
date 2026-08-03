@@ -4,6 +4,8 @@ import 'package:user_app/core/models/table.dart';
 void main() {
   group('TableItem.fromJson', () {
     test('parses a full response', () {
+      // Бэкенд отдаёт `properties` как String (gql.String в схеме), а не
+      // как настоящий GraphQL-список — это JSON-encoded массив внутри строки.
       final table = TableItem.fromJson({
         'tableId': '1',
         'loungeId': '2',
@@ -12,7 +14,7 @@ void main() {
         'rotation': 90,
         'seats': 2,
         'label': 'VIP-1',
-        'properties': ['tv', 'playstation'],
+        'properties': '["tv","playstation"]',
       });
 
       expect(table.tableId, '1');
@@ -37,6 +39,28 @@ void main() {
       expect(table.x, 0.0);
       expect(table.y, 0.0);
       expect(table.rotation, 0.0);
+    });
+
+    test('handles an empty properties string', () {
+      final table = TableItem.fromJson({
+        'tableId': '1',
+        'loungeId': '2',
+        'seats': 1,
+        'properties': '',
+      });
+
+      expect(table.properties, isEmpty);
+    });
+
+    test('handles malformed properties JSON gracefully', () {
+      final table = TableItem.fromJson({
+        'tableId': '1',
+        'loungeId': '2',
+        'seats': 1,
+        'properties': 'not json',
+      });
+
+      expect(table.properties, isEmpty);
     });
   });
 }

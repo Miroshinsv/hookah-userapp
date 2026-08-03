@@ -177,12 +177,7 @@ class _CommentsWidgetState extends State<CommentsWidget> {
             ),
           )
         else
-          ..._comments.map((c) => _CommentCard(
-                comment: c,
-                currentUserId: authState.phone,
-                currentFirstName: authState.firstName,
-                currentLastName: authState.lastName,
-              )),
+          ..._comments.map((c) => _CommentCard(comment: c)),
 
         const SizedBox(height: 8),
 
@@ -229,26 +224,8 @@ class _CommentsWidgetState extends State<CommentsWidget> {
 
 class _CommentCard extends StatelessWidget {
   final Comment comment;
-  final String? currentUserId;
-  final String? currentFirstName;
-  final String? currentLastName;
 
-  const _CommentCard({
-    required this.comment,
-    this.currentUserId,
-    this.currentFirstName,
-    this.currentLastName,
-  });
-
-  String _authorName() {
-    if (currentUserId != null && comment.userId == currentUserId) {
-      final name = [currentFirstName, currentLastName]
-          .where((p) => p != null && p.isNotEmpty)
-          .join(' ');
-      return name.isNotEmpty ? name : 'Пользователь';
-    }
-    return 'Пользователь';
-  }
+  const _CommentCard({required this.comment});
 
   String _formatDate(DateTime? dt) {
     if (dt == null) return '';
@@ -267,8 +244,8 @@ class _CommentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final name = _authorName();
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'П';
+    const name = 'Пользователь';
+    const initial = 'П';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -294,9 +271,9 @@ class _CommentCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Text(
+                    const Text(
                       name,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 13),
                     ),
                     const Spacer(),
