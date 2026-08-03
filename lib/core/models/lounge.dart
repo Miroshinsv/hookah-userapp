@@ -51,6 +51,70 @@ class StaffMember {
   }
 }
 
+class LoungeMapItem {
+  final String id;
+  final String name;
+  final String? shortAddress;
+  final double latitude;
+  final double longitude;
+  final double? rating;
+  final bool is24Hours;
+  final String status;
+  final double? distanceKm;
+
+  const LoungeMapItem({
+    required this.id,
+    required this.name,
+    this.shortAddress,
+    required this.latitude,
+    required this.longitude,
+    this.rating,
+    this.is24Hours = false,
+    required this.status,
+    this.distanceKm,
+  });
+
+  factory LoungeMapItem.fromJson(Map<String, dynamic> json) => LoungeMapItem(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        shortAddress: json['shortAddress'] as String?,
+        latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
+        longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+        rating: (json['rating'] as num?)?.toDouble(),
+        is24Hours: json['is24Hours'] as bool? ?? false,
+        status: json['status'] as String? ?? 'closed',
+        distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+      );
+}
+
+class LoungesPageResult {
+  final List<LoungeMapItem> items;
+  final int total;
+  final int page;
+  final int pageSize;
+  final int totalPages;
+
+  const LoungesPageResult({
+    required this.items,
+    required this.total,
+    required this.page,
+    required this.pageSize,
+    required this.totalPages,
+  });
+
+  factory LoungesPageResult.fromJson(Map<String, dynamic> json) =>
+      LoungesPageResult(
+        items: (json['items'] as List<dynamic>?)
+                ?.map((e) => LoungeMapItem.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+        total: (json['total'] as num?)?.toInt() ?? 0,
+        page: (json['page'] as num?)?.toInt() ?? 1,
+        pageSize: (json['pageSize'] as num?)?.toInt() ?? 0,
+        totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class Lounge {
   final String id;
   final String name;

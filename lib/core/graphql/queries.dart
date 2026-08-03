@@ -43,6 +43,51 @@ class GQLQueries {
     }
   ''';
 
+  static String loungesPage({
+    required double latitude,
+    required double longitude,
+    required int zoom,
+    String search = '',
+    int page = 1,
+    int pageSize = 200,
+    bool openNow = false,
+    bool is24HoursOnly = false,
+    double? minRating,
+    bool sortNearest = false,
+  }) =>
+      '''
+    query {
+      loungesPage(
+        search: ${jsonEncode(search)},
+        page: $page,
+        pageSize: $pageSize,
+        latitude: $latitude,
+        longitude: $longitude,
+        zoom: $zoom,
+        openNow: $openNow,
+        is24HoursOnly: $is24HoursOnly,
+        minRating: ${minRating ?? 0},
+        sortNearest: $sortNearest
+      ) {
+        items {
+          id
+          name
+          shortAddress
+          latitude
+          longitude
+          rating
+          is24Hours
+          status
+          distanceKm
+        }
+        total
+        page
+        pageSize
+        totalPages
+      }
+    }
+  ''';
+
   // limit hardcoded — переменные не нужны
   static const orders = r'''
     query {
