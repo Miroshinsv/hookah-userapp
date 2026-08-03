@@ -153,6 +153,21 @@ class GQLMutations {
     }
   ''';
 
+  static String registerDevice({required String fcmToken, String? loungeId}) => '''
+    mutation {
+      registerDevice(
+        fcmToken: ${jsonEncode(fcmToken)}
+        ${loungeId != null ? 'loungeId: ${jsonEncode(loungeId)}' : ''}
+      )
+    }
+  ''';
+
+  static String unregisterDevice(String fcmToken) => '''
+    mutation {
+      unregisterDevice(fcmToken: ${jsonEncode(fcmToken)})
+    }
+  ''';
+
   static String addSessionItem({
     required String sessionId,
     required String loungeId,

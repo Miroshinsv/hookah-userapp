@@ -7,6 +7,7 @@ import 'core/auth/auth_state.dart';
 import 'core/chat/unread_state.dart';
 import 'core/connectivity/connectivity_service.dart';
 import 'core/notifications/notification_service.dart';
+import 'core/notifications/push_service.dart';
 import 'core/utils/analytics.dart';
 import 'core/utils/logger.dart';
 import 'widgets/connectivity_wrapper.dart';
@@ -137,6 +138,9 @@ void main() {
 
       await Firebase.initializeApp();
       await NotificationService.init();
+      AppLogger.d('Push', 'init start');
+      await PushService.init();
+      AppLogger.d('Push', 'init complete');
       runApp(const App());
     },
     (error, stack) => AppLogger.e('Zone', error.toString(), error, stack),
