@@ -201,4 +201,45 @@ class GQLQueries {
       }
     }
   ''';
+
+  static String sessionItems({required String sessionId, required String loungeId}) => '''
+    query {
+      sessionItems(sessionId: ${jsonEncode(sessionId)}, loungeId: ${jsonEncode(loungeId)}) {
+        itemId
+        sessionId
+        loungeId
+        menuItemId
+        name
+        price
+        quantity
+        status
+        createdAt
+      }
+    }
+  ''';
+
+  static String menuCategories(String loungeId) => '''
+    query {
+      menuCategories(loungeId: ${jsonEncode(loungeId)}) {
+        categoryId
+        loungeId
+        name
+        sortOrder
+      }
+    }
+  ''';
+
+  static String menuItems({required String loungeId, String? categoryId}) => '''
+    query {
+      menuItems(loungeId: ${jsonEncode(loungeId)}${categoryId != null ? ', categoryId: ${jsonEncode(categoryId)}' : ''}) {
+        itemId
+        loungeId
+        categoryId
+        name
+        price
+        stopped
+        available
+      }
+    }
+  ''';
 }

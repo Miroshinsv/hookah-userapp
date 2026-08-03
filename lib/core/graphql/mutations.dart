@@ -152,4 +152,30 @@ class GQLMutations {
       cancelFeedbackRequest(orderId: ${jsonEncode(orderId)})
     }
   ''';
+
+  static String addSessionItem({
+    required String sessionId,
+    required String loungeId,
+    required String menuItemId,
+    int quantity = 1,
+  }) => '''
+    mutation {
+      addSessionItem(
+        sessionId: ${jsonEncode(sessionId)}
+        loungeId: ${jsonEncode(loungeId)}
+        menuItemId: ${jsonEncode(menuItemId)}
+        quantity: $quantity
+      ) {
+        itemId
+        sessionId
+        loungeId
+        menuItemId
+        name
+        price
+        quantity
+        status
+        createdAt
+      }
+    }
+  ''';
 }
