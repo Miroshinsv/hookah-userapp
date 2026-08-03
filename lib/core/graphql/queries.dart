@@ -242,4 +242,18 @@ class GQLQueries {
       }
     }
   ''';
+
+  static String tobaccos(String loungeId) => '''
+    query {
+      tobaccos(loungeId: ${jsonEncode(loungeId)}) {
+        tobaccoId
+        loungeId
+        name
+        strength
+        price
+        createdAt
+        updatedAt
+      }
+    }
+  ''';
 }

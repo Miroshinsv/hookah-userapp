@@ -15,6 +15,7 @@ import 'screens/auth/auth_screen.dart';
 import 'screens/main_screen.dart';
 import 'screens/lounge/lounge_detail_screen.dart';
 import 'screens/lounge/lounge_chat_screen.dart';
+import 'screens/lounge/tobacco_catalog_screen.dart';
 import 'screens/order/new_order_screen.dart';
 import 'screens/order/order_detail_screen.dart';
 import 'screens/staff/staff_detail_screen.dart';
@@ -177,6 +178,7 @@ class _AppState extends State<App> {
             '/main': (_) => const MainScreen(),
             '/lounge': (_) => const LoungeDetailScreen(),
             '/lounge/chat': (_) => const LoungeChatScreen(),
+            '/lounge/tobaccos': (_) => const TobaccoCatalogScreen(),
             '/order/new': (_) => const NewOrderScreen(),
             '/order': (_) => const OrderDetailScreen(),
             '/staff': (_) => const StaffDetailScreen(),

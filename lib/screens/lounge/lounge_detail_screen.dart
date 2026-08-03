@@ -188,6 +188,20 @@ class _LoungeInfo extends StatelessWidget {
             ),
           const SizedBox(height: 12),
         ],
+        if (hasOwner) ...[
+          OutlinedButton.icon(
+            onPressed: () {
+              AppLogger.d('LoungeDetail', 'open tobacco catalog loungeId=${lounge.id}');
+              Navigator.pushNamed(context, '/lounge/tobaccos', arguments: lounge);
+            },
+            icon: const Icon(Icons.local_fire_department_outlined),
+            label: const Text('Каталог табаков'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         if (lounge.chatEnabled) ...[
           OutlinedButton.icon(
             onPressed: hasOwner && isLoggedIn
