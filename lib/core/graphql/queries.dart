@@ -173,4 +173,32 @@ class GQLQueries {
       }
     }
   ''';
+
+  static String tables(String loungeId) => '''
+    query {
+      tables(loungeId: ${jsonEncode(loungeId)}) {
+        tableId
+        loungeId
+        x
+        y
+        rotation
+        seats
+        label
+        properties
+      }
+    }
+  ''';
+
+  static String activeSessions(String loungeId) => '''
+    query {
+      activeSessions(loungeId: ${jsonEncode(loungeId)}) {
+        sessionId
+        tableId
+        orderId
+        guestCount
+        status
+        openedAt
+      }
+    }
+  ''';
 }

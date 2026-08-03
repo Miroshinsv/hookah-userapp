@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
+import '../../core/utils/logger.dart';
 import '../../core/utils/schedule_parser.dart';
 import '../../widgets/comments_widget.dart';
 import '../../widgets/lounge_photo_gallery.dart';
@@ -155,6 +156,38 @@ class _LoungeInfo extends StatelessWidget {
         ),
 
         const SizedBox(height: 24),
+        if (hasOwner) ...[
+          OutlinedButton.icon(
+            onPressed: isLoggedIn
+                ? () {
+                    AppLogger.d('LoungeDetail', 'open my-table loungeId=${lounge.id}');
+                    Navigator.pushNamed(context, '/table/my-table',
+                        arguments: lounge);
+                  }
+                : null,
+            icon: const Icon(Icons.table_bar_outlined),
+            label: const Text('Мой стол'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+            ),
+          ),
+          if (!isLoggedIn)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock_outline, size: 14, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Требуется авторизация',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 12),
+        ],
         if (lounge.chatEnabled) ...[
           OutlinedButton.icon(
             onPressed: hasOwner && isLoggedIn
