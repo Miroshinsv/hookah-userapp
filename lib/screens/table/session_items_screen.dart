@@ -48,18 +48,22 @@ class _SessionItemsScreenState extends State<SessionItemsScreen> {
   late String _sessionId;
   late String _loungeId;
   late String _tableLabel;
+  bool _argsResolved = false;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args =
-          ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-      _sessionId = args['sessionId'] as String;
-      _loungeId = args['loungeId'] as String;
-      _tableLabel = args['tableLabel'] as String? ?? '';
-      _load();
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // didChangeDependencies (not initState) is the correct place to read
+    // ModalRoute — it runs before the first build(), which already reads
+    // _tableLabel below.
+    if (_argsResolved) return;
+    _argsResolved = true;
+    final args =
+        ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+    _sessionId = args['sessionId'] as String;
+    _loungeId = args['loungeId'] as String;
+    _tableLabel = args['tableLabel'] as String? ?? '';
+    _load();
   }
 
   Future<void> _load() async {
