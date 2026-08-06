@@ -195,6 +195,11 @@ class AuthState extends ChangeNotifier {
     return GraphQLClient(
       link: link,
       cache: GraphQLCache(store: InMemoryStore()),
+      // graphql's own default is 5s, which is too tight for a mobile network
+      // round trip through the gateway to backend gRPC services — a slow but
+      // successful request would surface as a spurious "No stream event"
+      // TimeoutException to the user even though it completed on the server.
+      queryRequestTimeout: const Duration(seconds: 20),
     );
   }
 }
