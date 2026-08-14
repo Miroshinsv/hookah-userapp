@@ -89,22 +89,22 @@ Push-инфраструктура в проекте уже частично ре
 
 ### Фаза 2 — показ push и обработка тапа
 
-4. **Парсер `OrderPushPayload` для data-payload FCM**
+4. [x] **Парсер `OrderPushPayload` для data-payload FCM**
    Файлы: `lib/core/notifications/order_push_payload.dart` (новый), `test/core/notifications/order_push_payload_test.dart` (новый)
    Чистый класс с фабрикой `OrderPushPayload? tryParse(Map<String, dynamic> data)`: `null`, если `eventType != "order_status_updated"` или `orderId` пуст/отсутствует (неизвестные/будущие eventType игнорируются молча, без падений); иначе — заполненный объект (`orderId`, `loungeId`, `status`). Общий код для foreground- и tap-обработчиков, тестируется без мока Firebase.
    Тесты: валидный payload; неверный/отсутствующий `eventType`; отсутствующий `orderId`; отсутствующие необязательные `loungeId`/`status`.
 
-5. **Глобальный `navigatorKey` / `NavigationService`**
+5. [x] **Глобальный `navigatorKey` / `NavigationService`**
    Файлы: `lib/core/navigation/navigation_service.dart` (новый), `lib/main.dart`
    `static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();`, подключить в `MaterialApp(navigatorKey: ...)`. Нужен, чтобы обработчики тапа по push (не имеющие `BuildContext`) могли получить контекст через `navigatorKey.currentContext` и вызвать навигацию.
 
-6. **Показ push-текста как есть + обработка тапа по локальному уведомлению**
+6. [x] **Показ push-текста как есть + обработка тапа по локальному уведомлению** (заодно создан `lib/core/notifications/push_navigation.dart` из задачи 8 — понадобился раньше по зависимостям)
    Файл: `lib/core/notifications/notification_service.dart`
    Блокируется: 5.
    Добавить `showOrderStatusPush({required orderId, required title, required body})` — показывает переданные `title`/`body` без изменений (не переформулировать на клиенте, сервер уже прислал готовый локализованный текст) на канале `order_status`, с `payload: orderId` в `_plugin.show(...)`. Зарегистрировать `onDidReceiveNotificationResponse` в `_plugin.initialize(...)`: читает `response.payload` (orderId) и переиспользует общий helper навигации из задачи 8 (не дублировать логику поиска/перехода).
    Логи (verbose): `AppLogger.d` перед показом с orderId; `AppLogger.i` в колбэке тапа с orderId; сохранить существующий `AppLogger.w` при ошибке показа.
 
-7. **Foreground-сообщения и фон/terminated-тапы в `PushService`**
+7. [x] **Foreground-сообщения и фон/terminated-тапы в `PushService`**
    Файл: `lib/core/notifications/push_service.dart`
    Блокируется: 4, 6.
    - `_handleForegroundMessage`: парсить `message.data` через `OrderPushPayload.tryParse`; если не `null` — вызвать `NotificationService.showOrderStatusPush(orderId: ..., title: message.notification?.title ?? 'Обновление заказа', body: message.notification?.body ?? 'Статус изменён')` (fallback — чисто защитный, сервер всегда шлёт notification.title/body). Это заменяет текущее поведение "ничего не показывать, чтобы не дублировать WS-уведомление" — дубликат убирается в задаче 9.
@@ -113,7 +113,7 @@ Push-инфраструктура в проекте уже частично ре
    - `_handleNotificationTap(RemoteMessage)`: парсинг через `OrderPushPayload.tryParse`, вызов `onOrderTap?.call(payload)` при успехе.
    Логи (verbose): `AppLogger.d`/`AppLogger.w` для foreground-парсинга; `AppLogger.i`/`AppLogger.w` для тап-обработки.
 
-8. **Deep link тапа по уведомлению на `OrderDetailScreen` со свежим запросом заказа**
+8. [x] **Deep link тапа по уведомлению на `OrderDetailScreen` со свежим запросом заказа**
    Файлы: `lib/core/notifications/push_navigation.dart` (новый), `lib/main.dart`, `test/core/notifications/push_navigation_test.dart` (новый)
    Блокируется: 4, 5, 7.
    Чистая функция `Order? findOrderById(List<Order> orders, String orderId)` — тестируется без Firebase/виджетов. В `lib/main.dart` подключить `PushService.onOrderTap = (payload) => handleOrderPushTap(payload)`:

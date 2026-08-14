@@ -1,10 +1,14 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:meta/meta.dart';
 import '../utils/logger.dart';
+import 'notification_service.dart';
+import 'order_push_payload.dart';
 
-// FCM-токен гостя: получение, обновление и обработка foreground-сообщений.
-// Фоновые/закрытые состояния приложения показываются системой автоматически
-// по payload уведомления — отдельный background handler здесь не нужен.
+// FCM-токен гостя: получение, обновление, показ foreground-уведомлений и
+// обработка тапа по push (фон/terminated — через onMessageOpenedApp и
+// getInitialMessage()). Отдельный background handler не нужен: пока
+// приложение свёрнуто/закрыто, системное уведомление показывает сама ОС по
+// notification.title/body из payload.
 class PushService {
   static const _tag = 'Push';
 
@@ -14,6 +18,11 @@ class PushService {
   // Вызывается при первом получении токена и при каждом onTokenRefresh —
   // AuthState подписывается сюда, чтобы повторно вызвать registerDevice.
   static void Function(String token)? onToken;
+
+  // Вызывается при тапе по push (foreground onMessageOpenedApp, а также
+  // запуск из terminated-состояния через getInitialMessage). PushService
+  // сам не занимается навигацией/GraphQL — это подключает main.dart.
+  static void Function(OrderPushPayload payload)? onOrderTap;
 
   static Future<void> init() async {
     if (_initialized) return;
@@ -43,6 +52,19 @@ class PushService {
     });
 
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+
+    // Приложение могло быть запущено тапом по push из terminated-состояния —
+    // getInitialMessage() возвращает то сообщение, если оно и было причиной запуска.
+    try {
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) {
+        AppLogger.d(_tag, 'getInitialMessage found a launch message');
+        _handleNotificationTap(initial);
+      }
+    } catch (e, stack) {
+      AppLogger.w(_tag, 'getInitialMessage failed', e, stack);
+    }
   }
 
   static String? get token => _token;
@@ -53,14 +75,30 @@ class PushService {
   static void debugSetToken(String? token) => _token = token;
 
   static void _handleForegroundMessage(RemoteMessage message) {
-    AppLogger.i(
-      _tag,
-      'foreground message type=${message.data['type']} orderId=${message.data['orderId']}',
+    final payload = OrderPushPayload.tryParse(message.data);
+    if (payload == null) {
+      AppLogger.w(_tag, 'foreground push ignored — unparseable data ${message.data}');
+      return;
+    }
+    AppLogger.d(_tag, 'foreground push parsed orderId=${payload.orderId} status=${payload.status}');
+    // FCM не показывает системное уведомление сам, пока приложение активно —
+    // показываем его локально готовым title/body из payload (сервер уже
+    // прислал локализованный текст, на клиенте не переформулируем).
+    NotificationService.showOrderStatusPush(
+      orderId: payload.orderId,
+      title: message.notification?.title ?? 'Обновление заказа',
+      body: message.notification?.body ?? 'Статус изменён',
     );
-    // Статус заказа и чат уже приходят и отображаются через существующие
-    // WebSocket-подписки (orderStatusChanged) пока приложение открыто — не
-    // показываем локальное уведомление здесь повторно, иначе получится дубль.
-    // Push — дублирующий канал именно для свёрнутого/закрытого приложения.
+  }
+
+  static void _handleNotificationTap(RemoteMessage message) {
+    final payload = OrderPushPayload.tryParse(message.data);
+    if (payload == null) {
+      AppLogger.w(_tag, 'tap ignored — unparseable data ${message.data}');
+      return;
+    }
+    AppLogger.i(_tag, 'notification tap orderId=${payload.orderId} status=${payload.status}');
+    onOrderTap?.call(payload);
   }
 
   static String _redact(String token) {
