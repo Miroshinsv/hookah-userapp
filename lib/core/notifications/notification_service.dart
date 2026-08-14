@@ -1,6 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../utils/logger.dart';
-import '../utils/status_helper.dart';
 import 'order_push_payload.dart';
 import 'push_navigation.dart';
 
@@ -100,32 +99,4 @@ class NotificationService {
     handleOrderPushTap(OrderPushPayload(orderId: orderId));
   }
 
-  static Future<void> showStatusChanged({
-    required String orderId,
-    required String newStatus,
-  }) async {
-    if (!_initialized) return;
-    try {
-      const androidDetails = AndroidNotificationDetails(
-        _statusChannelId,
-        _statusChannelName,
-        importance: Importance.high,
-        priority: Priority.high,
-        showWhen: true,
-      );
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: DarwinNotificationDetails(),
-      );
-      final label = StatusHelper.localize(newStatus);
-      await _plugin.show(
-        ('status_$orderId').hashCode,
-        'Статус заказа изменён',
-        'Заказ #$orderId: $label',
-        details,
-      );
-    } catch (e) {
-      AppLogger.w(_tag, 'showStatusChanged failed', e);
-    }
-  }
 }
