@@ -98,20 +98,14 @@ class OrdersScreenState extends State<OrdersScreen> {
     _statusSub?.cancel();
     _msgSub?.cancel();
 
-    // Подписка на изменение статуса заказа
+    // Подписка на изменение статуса заказа — обновляет список заказов live.
+    // Само уведомление пользователю теперь показывает push (готовый текст с
+    // сервера через PushService/NotificationService.showOrderStatusPush), не
+    // дублируем его здесь.
     _statusSub = _client.subscribe(SubscriptionOptions(
       document: gql(GQLSubscriptions.orderStatusChanged),
     )).listen((result) {
       if (!mounted || result.data == null) return;
-      final changed =
-          result.data!['orderStatusChanged'] as Map<String, dynamic>?;
-      if (changed != null) {
-        final id     = changed['id']     as String? ?? '';
-        final status = changed['status'] as String? ?? '';
-        if (id.isNotEmpty && status.isNotEmpty) {
-          NotificationService.showStatusChanged(orderId: id, newStatus: status);
-        }
-      }
       _fetch();
     });
 

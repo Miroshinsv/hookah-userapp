@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 import 'core/auth/auth_state.dart';
 import 'core/chat/unread_state.dart';
 import 'core/connectivity/connectivity_service.dart';
+import 'core/navigation/navigation_service.dart';
 import 'core/notifications/notification_service.dart';
+import 'core/notifications/push_navigation.dart';
 import 'core/notifications/push_service.dart';
 import 'core/utils/analytics.dart';
 import 'core/utils/logger.dart';
@@ -138,6 +140,7 @@ void main() {
 
       await Firebase.initializeApp();
       await NotificationService.init();
+      PushService.onOrderTap = handleOrderPushTap;
       AppLogger.d('Push', 'init start');
       await PushService.init();
       AppLogger.d('Push', 'init complete');
@@ -172,6 +175,7 @@ class _AppState extends State<App> {
         child: MaterialApp(
           title: 'Hookah Order',
           debugShowCheckedModeBanner: false,
+          navigatorKey: NavigationService.navigatorKey,
           theme: _buildTheme(),
           navigatorObservers: [Analytics.observer],
           builder: (context, child) => ConnectivityWrapper(child: child!),
