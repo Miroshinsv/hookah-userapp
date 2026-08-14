@@ -24,7 +24,7 @@ flutter run
 
 | Guide | Description |
 |-------|-------------|
-| [Guest Table Sessions, Tobacco Catalog & Push](docs/guest-table-sessions.md) | Joining a table session, adding items, tobacco catalog, FCM push registration |
+| [Guest Table Sessions, Tobacco Catalog & Push](docs/guest-table-sessions.md) | Joining a table session, adding items, tobacco catalog, FCM push registration & order-status alerts |
 
 ## Getting Started (Flutter)
 
