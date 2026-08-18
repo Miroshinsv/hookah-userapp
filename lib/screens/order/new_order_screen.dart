@@ -5,7 +5,9 @@ import '../../core/auth/auth_state.dart';
 import '../../core/graphql/mutations.dart';
 import '../../core/models/lounge.dart';
 import '../../core/models/order.dart';
+import '../../core/utils/logger.dart';
 import '../../core/utils/phone_hash.dart';
+import '../table/menu_item_picker.dart';
 
 class NewOrderScreen extends StatefulWidget {
   const NewOrderScreen({super.key});
@@ -30,12 +32,23 @@ class _QuickTimeChip extends StatelessWidget {
 }
 
 class _NewOrderScreenState extends State<NewOrderScreen> {
+  static const _tag = 'NewOrder';
+
   final _formKey    = GlobalKey<FormState>();
   final _flavorCtrl = TextEditingController();
   final _commentCtrl = TextEditingController();
   DateTime? _arrivalAt;
   String?   _error;
   bool      _loading = false;
+  // Позиции меню, выбранные до создания заказа — чисто локальное состояние
+  // (можно убрать позицию из этого списка без ограничений, это ещё не
+  // заказ). После успешного createOrder каждая позиция докидывается через
+  // addOrderItems, так как контракт addOrderItems требует существующий
+  // orderId — добавить позиции в самой мутации createOrder нельзя.
+  final List<MenuItemPickResult> _cartItems = [];
+
+  double get _cartSubtotal =>
+      _cartItems.fold(0.0, (sum, c) => sum + c.item.price * c.quantity);
 
   @override
   void dispose() {
@@ -82,6 +95,28 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year}'
       '  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
+  Future<void> _addMenuItem(Lounge lounge) async {
+    final picked = await showMenuItemPicker(context, loungeId: lounge.id);
+    if (picked == null || !mounted) return;
+
+    AppLogger.d(_tag, 'cart add menuItemId=${picked.item.itemId} quantity=${picked.quantity}');
+    setState(() {
+      final idx = _cartItems.indexWhere((c) => c.item.itemId == picked.item.itemId);
+      if (idx != -1) {
+        final existing = _cartItems[idx];
+        _cartItems[idx] =
+            MenuItemPickResult(item: existing.item, quantity: existing.quantity + picked.quantity);
+      } else {
+        _cartItems.add(picked);
+      }
+    });
+  }
+
+  void _removeFromCart(int index) {
+    AppLogger.d(_tag, 'cart remove menuItemId=${_cartItems[index].item.itemId}');
+    setState(() => _cartItems.removeAt(index));
+  }
+
   Future<void> _submit(Lounge lounge) async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
@@ -118,7 +153,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     final orderData = result.data?['createOrder'] as Map<String, dynamic>?;
     if (orderData != null) {
       final auth = context.read<AuthState>();
-      final order = Order.fromJson({
+      var order = Order.fromJson({
         ...orderData,
         'loungeId':  lounge.id,
         'flavor':    _flavorCtrl.text,
@@ -126,9 +161,75 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         'phone':     auth.phone ?? '',
         'arrivalAt': _arrivalAt?.toUtc().toIso8601String(),
       });
+
+      if (_cartItems.isNotEmpty) {
+        order = await _addCartItemsToOrder(client, order, lounge);
+        if (!mounted) return;
+      }
+
       Navigator.pushReplacementNamed(context, '/order',
           arguments: {'order': order, 'lounge': lounge});
     }
+  }
+
+  // createOrder не принимает позиции меню — контракт addOrderItems требует
+  // уже существующий orderId, поэтому корзина докидывается отдельными
+  // вызовами сразу после успешного создания заказа. Заказ уже создан к
+  // этому моменту, так что сбой добавления одной позиции не блокирует
+  // переход на экран заказа — только предупреждает тостом.
+  Future<Order> _addCartItemsToOrder(GraphQLClient client, Order order, Lounge lounge) async {
+    var updated = order;
+    final failed = <String>[];
+
+    for (final cartItem in _cartItems) {
+      AppLogger.d(
+        _tag,
+        'addOrderItems orderId=${updated.id} menuItemId=${cartItem.item.itemId} quantity=${cartItem.quantity}',
+      );
+      final addResult = await client.mutate(MutationOptions(
+        document: gql(GQLMutations.addOrderItems(
+          orderId: updated.id,
+          loungeId: lounge.id,
+          menuItemId: cartItem.item.itemId,
+          quantity: cartItem.quantity,
+        )),
+      ));
+
+      if (!mounted) return updated;
+
+      if (addResult.hasException) {
+        final message = addResult.exception?.graphqlErrors.firstOrNull?.message;
+        AppLogger.w(
+          _tag,
+          'addOrderItems failed orderId=${updated.id} menuItemId=${cartItem.item.itemId}: $message',
+          addResult.exception,
+        );
+        failed.add(cartItem.item.name);
+        continue;
+      }
+
+      final data = addResult.data?['addOrderItems'] as Map<String, dynamic>?;
+      if (data == null) continue;
+      updated = updated.copyWith(
+        status: data['status'] as String?,
+        menuItems: (data['menuItems'] as List<dynamic>?)
+            ?.map((e) => OrderMenuItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        hookahItems: (data['hookahItems'] as List<dynamic>?)
+            ?.map((e) => OrderHookahItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        subtotal: (data['subtotal'] as num?)?.toDouble(),
+        finalTotal: (data['finalTotal'] as num?)?.toDouble(),
+      );
+      AppLogger.i(_tag, 'addOrderItems ok orderId=${updated.id} menuItemId=${cartItem.item.itemId}');
+    }
+
+    if (failed.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Заказ создан, но не удалось добавить: ${failed.join(", ")}')),
+      );
+    }
+    return updated;
   }
 
   @override
@@ -200,6 +301,46 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                   const SizedBox(width: 8),
                   _QuickTimeChip(label: '1 час',  onTap: () => _setArrivalIn(60)),
                 ],
+              ),
+              const SizedBox(height: 20),
+              if (_cartItems.isNotEmpty) ...[
+                const Text('Позиции меню',
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                const SizedBox(height: 6),
+                for (var i = 0; i < _cartItems.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text('${_cartItems[i].item.name} × ${_cartItems[i].quantity}',
+                              style: const TextStyle(color: Colors.grey)),
+                        ),
+                        Text(
+                          '${(_cartItems[i].item.price * _cartItems[i].quantity).toStringAsFixed(0)} ₽',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        IconButton(
+                          onPressed: () => _removeFromCart(i),
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Убрать позицию',
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Text('Меню на сумму: ${_cartSubtotal.toStringAsFixed(0)} ₽',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 10),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _loading ? null : () => _addMenuItem(lounge),
+                  icon: const Icon(Icons.add),
+                  label: const Text('+ Меню'),
+                ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
