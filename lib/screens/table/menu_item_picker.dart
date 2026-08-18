@@ -11,8 +11,9 @@ class MenuItemPickResult {
   const MenuItemPickResult({required this.item, required this.quantity});
 }
 
-// Минимальный выбор позиции меню для addSessionItem — плоский список без
-// категорий-вкладок, без корзины. Полноценный конструктор меню — отдельная задача.
+// Минимальный выбор позиции меню — список с фильтром по категориям (чай,
+// холодные напитки и т.д.), без корзины/поиска. Полноценный конструктор
+// меню — отдельная задача.
 Future<MenuItemPickResult?> showMenuItemPicker(
   BuildContext context, {
   required String loungeId,
@@ -39,6 +40,9 @@ class _MenuItemPickerSheetState extends State<_MenuItemPickerSheet> {
   bool _loading = true;
   String? _error;
   List<MenuItem> _items = const [];
+  List<MenuCategory> _categories = const [];
+  // null = фильтр "Все"
+  String? _selectedCategoryId;
 
   @override
   void initState() {
@@ -48,17 +52,29 @@ class _MenuItemPickerSheetState extends State<_MenuItemPickerSheet> {
 
   Future<void> _load() async {
     final client = GraphQLProvider.of(context).value;
-    final result = await client.query(QueryOptions(
-      document: gql(GQLQueries.menuItems(loungeId: widget.loungeId)),
-      fetchPolicy: FetchPolicy.networkOnly,
-    ));
+    // Категории и позиции грузятся параллельно одним query-барьером — весь
+    // список позиций загружается сразу (без categoryId), фильтр по
+    // категории дальше применяется на клиенте без повторных запросов.
+    final results = await Future.wait([
+      client.query(QueryOptions(
+        document: gql(GQLQueries.menuItems(loungeId: widget.loungeId)),
+        fetchPolicy: FetchPolicy.networkOnly,
+      )),
+      client.query(QueryOptions(
+        document: gql(GQLQueries.menuCategories(widget.loungeId)),
+        fetchPolicy: FetchPolicy.networkOnly,
+      )),
+    ]);
 
     if (!mounted) return;
 
-    if (result.hasException) {
+    final itemsResult = results[0];
+    final categoriesResult = results[1];
+
+    if (itemsResult.hasException) {
       final message =
-          result.exception?.graphqlErrors.firstOrNull?.message ?? 'Не удалось загрузить меню';
-      AppLogger.w(_tag, 'load failed loungeId=${widget.loungeId}: $message');
+          itemsResult.exception?.graphqlErrors.firstOrNull?.message ?? 'Не удалось загрузить меню';
+      AppLogger.w(_tag, 'load items failed loungeId=${widget.loungeId}: $message');
       setState(() {
         _loading = false;
         _error = message;
@@ -66,19 +82,53 @@ class _MenuItemPickerSheetState extends State<_MenuItemPickerSheet> {
       return;
     }
 
-    final data = (result.data?['menuItems'] as List<Object?>?) ?? const [];
-    final items = data
+    final itemsData = (itemsResult.data?['menuItems'] as List<Object?>?) ?? const [];
+    final items = itemsData
         .cast<Map<String, dynamic>>()
         .map(MenuItem.fromJson)
         .where((i) => !i.stopped && i.available)
         .toList();
 
-    AppLogger.d(_tag, 'loaded loungeId=${widget.loungeId} items=${items.length}');
+    // Категории — вспомогательный UI-фильтр, а не обязательные данные: сбой
+    // их загрузки не должен блокировать выбор позиций, просто не будет
+    // строки фильтра.
+    var categories = const <MenuCategory>[];
+    if (categoriesResult.hasException) {
+      AppLogger.w(
+        _tag,
+        'load categories failed loungeId=${widget.loungeId}',
+        categoriesResult.exception,
+      );
+    } else {
+      final categoriesData =
+          (categoriesResult.data?['menuCategories'] as List<Object?>?) ?? const [];
+      categories = categoriesData.cast<Map<String, dynamic>>().map(MenuCategory.fromJson).toList();
+    }
+
+    AppLogger.d(
+      _tag,
+      'loaded loungeId=${widget.loungeId} items=${items.length} categories=${categories.length}',
+    );
 
     setState(() {
       _loading = false;
       _items = items;
+      _categories = categories;
     });
+  }
+
+  // Только категории, у которых реально есть видимые позиции — иначе фильтр
+  // предлагал бы выбрать пустую категорию.
+  List<MenuCategory> get _categoriesWithItems {
+    final presentIds = _items.map((i) => i.categoryId).whereType<String>().toSet();
+    final filtered = _categories.where((c) => presentIds.contains(c.categoryId)).toList();
+    filtered.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    return filtered;
+  }
+
+  List<MenuItem> get _visibleItems {
+    if (_selectedCategoryId == null) return _items;
+    return _items.where((i) => i.categoryId == _selectedCategoryId).toList();
   }
 
   Future<void> _pick(MenuItem item) async {
@@ -121,7 +171,7 @@ class _MenuItemPickerSheetState extends State<_MenuItemPickerSheet> {
                 dialogContext,
                 MenuItemPickResult(item: item, quantity: quantity),
               ),
-              child: const Text('Добавить'),
+              child: const Text('  Добавить  '),
             ),
           ],
         ),
@@ -140,9 +190,41 @@ class _MenuItemPickerSheetState extends State<_MenuItemPickerSheet> {
               padding: EdgeInsets.all(16),
               child: Text('Выберите позицию', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
+            if (!_loading && _error == null) _buildCategoryFilter(),
             Expanded(child: _buildBody()),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryFilter() {
+    final categories = _categoriesWithItems;
+    // Меньше двух категорий с позициями — фильтровать нечего.
+    if (categories.length < 2) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length + 1,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            return ChoiceChip(
+              label: const Text('Все'),
+              selected: _selectedCategoryId == null,
+              onSelected: (_) => setState(() => _selectedCategoryId = null),
+            );
+          }
+          final category = categories[index - 1];
+          return ChoiceChip(
+            label: Text(category.name),
+            selected: _selectedCategoryId == category.categoryId,
+            onSelected: (_) => setState(() => _selectedCategoryId = category.categoryId),
+          );
+        },
       ),
     );
   }
@@ -157,10 +239,15 @@ class _MenuItemPickerSheetState extends State<_MenuItemPickerSheet> {
     if (_items.isEmpty) {
       return const Center(child: Text('Меню пока пустое'));
     }
+    final visible = _visibleItems;
+    if (visible.isEmpty) {
+      return const Center(child: Text('В этой категории пока нет позиций'));
+    }
     return ListView.builder(
-      itemCount: _items.length,
+      padding: const EdgeInsets.only(top: 8),
+      itemCount: visible.length,
       itemBuilder: (context, index) {
-        final item = _items[index];
+        final item = visible[index];
         return ListTile(
           title: Text(item.name),
           trailing: Text('${item.price.toStringAsFixed(0)} ₽'),
