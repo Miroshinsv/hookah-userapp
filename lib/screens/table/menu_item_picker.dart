@@ -212,22 +212,37 @@ class _MenuItemPickerSheetState extends State<_MenuItemPickerSheet> {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           if (index == 0) {
+            final selected = _selectedCategoryId == null;
             return ChoiceChip(
               label: const Text('Все'),
-              selected: _selectedCategoryId == null,
+              selected: selected,
+              selectedColor: _chipSelectedColor,
+              labelStyle: _chipLabelStyle(selected),
               onSelected: (_) => setState(() => _selectedCategoryId = null),
             );
           }
           final category = categories[index - 1];
+          final selected = _selectedCategoryId == category.categoryId;
           return ChoiceChip(
             label: Text(category.name),
-            selected: _selectedCategoryId == category.categoryId,
+            selected: selected,
+            selectedColor: _chipSelectedColor,
+            labelStyle: _chipLabelStyle(selected),
             onSelected: (_) => setState(() => _selectedCategoryId = category.categoryId),
           );
         },
       ),
     );
   }
+
+  // Дефолтный ChoiceChip в выбранном состоянии даёт жёлтый фон с белым
+  // текстом — нечитаемо. Фон оставляем жёлтым (kGold из main.dart), но
+  // текст выбранного чипа делаем чёрным; невыбранный чип не трогаем — его
+  // цвет по-прежнему берётся из ChipThemeData.labelStyle (main.dart).
+  static const _chipSelectedColor = Color(0xFFC9A84C);
+
+  TextStyle? _chipLabelStyle(bool selected) =>
+      selected ? const TextStyle(color: Colors.black) : null;
 
   Widget _buildBody() {
     if (_loading) {
