@@ -113,19 +113,19 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
 
 ### Phase 3: Тесты
 
-- [ ] Task 8: Unit-тесты модели — новый файл `test/core/models/order_test.dart`
+- [x] Task 8: Unit-тесты модели — новый файл `test/core/models/order_test.dart`
   - По образцу `test/core/models/session_item_test.dart` / `test/core/models/menu_item_test.dart`: `Order.fromJson` парсит `menuItems`/`hookahItems`/`subtotal`/`finalTotal`, включая случай отсутствующих полей (defaults: пустые списки, `null` для сумм).
   - Тесты на `Order.isEditable` — `true` для `new`/`in_progress`/`calculation`, `false` для `completed`/`canceled`/`canceled_by_user`/`canceled_by_staff`.
   - Тест на `copyWith` — что `menuItems`/`hookahItems`/`subtotal`/`finalTotal` можно обновить, не потеряв `loungeId`/`flavor`/`comment`/`phone`/`arrivalAt`/`createdAt`.
   - Логирование: не применимо — unit-тесты чистых функций.
   - Файлы: `test/core/models/order_test.dart`
 
-- [ ] Task 9: Unit-тест мутации — добавить группу в `test/core/graphql/device_mutations_test.dart`? Нет — создать новый файл `test/core/graphql/order_mutations_test.dart` (мутация не относится к device-теме)
+- [x] Task 9: Unit-тест мутации — добавить группу в `test/core/graphql/device_mutations_test.dart`? Нет — создать новый файл `test/core/graphql/order_mutations_test.dart` (мутация не относится к device-теме)
   - По образцу существующих тестов `GQLMutations.registerDevice`/`unregisterDevice`: проверить, что `GQLMutations.addOrderItems(...)` интерполирует `orderId`, `loungeId`, `menuItemId`, `quantity` и корректно экранирует кавычки (`jsonEncode`), и что `hookahItems` в строке отсутствует (вне объёма фичи).
   - Логирование: не применимо — unit-тест строковой генерации.
   - Файлы: `test/core/graphql/order_mutations_test.dart`
 
-- [ ] Task 10: Widget-тесты `order_detail_screen.dart` — новый файл `test/screens/order/order_detail_screen_test.dart` (depends on: 4, 5, 6, 7)
+- [x] Task 10: Widget-тесты `order_detail_screen.dart` — новый файл `test/screens/order/order_detail_screen_test.dart` (depends on: 4, 5, 6, 7)
   - По образцу `test/screens/table/session_items_screen_test.dart` (лёгкий regression-стиль, `GraphQLClient` на невалидный URL, без сетевого мокинга): экран строится без исключений на первом кадре для заказа со статусом `in_progress`.
   - Кнопка «+ Меню» и кнопка «Меню» в чате видны для `_order.isEditable == true` (`new`/`in_progress`/`calculation`) и отсутствуют для `completed`/`canceled*`.
   - Блок позиций/итога рендерится при непустых `menuItems`, и не рендерится (нет пустого заголовка) при пустых.
