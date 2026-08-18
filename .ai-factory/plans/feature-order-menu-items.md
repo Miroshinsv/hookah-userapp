@@ -72,14 +72,14 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
 
 ### Phase 2: Экран заказа — отображение и добавление позиций
 
-- [ ] Task 4: Блок «Позиции заказа» в `_buildOrderInfo()` (`lib/screens/order/order_detail_screen.dart`)
+- [x] Task 4: Блок «Позиции заказа» в `_buildOrderInfo()` (`lib/screens/order/order_detail_screen.dart`)
   - После текущей строки «Статус: …» добавить список уже добавленных позиций: `_order.menuItems` и `_order.hookahItems`, каждая строка — `'${item.name} × ${item.quantity}'` + `'${item.unitPrice.toStringAsFixed(0)} ₽'` (стиль как в `session_items_screen.dart` `_buildBody()`), без каких-либо кнопок удаления/отмены (см. ограничение ТЗ раздел 4).
   - Показать `Итого: ${_order.finalTotal?.toStringAsFixed(0) ?? '—'} ₽` под списком; при пустых `menuItems`/`hookahItems` список не показывать вовсе (не показывать пустой заголовок).
   - НЕ показывать поля скидок/баллов лояльности (явное требование ТЗ раздел 3).
   - Логирование: не требуется — чистый рендеринг уже загруженного состояния `_order`, без сетевых вызовов.
   - Файлы: `lib/screens/order/order_detail_screen.dart`
 
-- [ ] Task 5: Общий обработчик добавления позиции + кнопка «+ Меню» (depends on: 1, 3, 4)
+- [x] Task 5: Общий обработчик добавления позиции + кнопка «+ Меню» (depends on: 1, 3, 4)
   - Добавить `bool _addingMenuItem = false;` и `static const _tag = 'OrderDetail';` (если тега ещё нет в классе).
   - Метод `Future<void> _addMenuItem()`, по образцу `_addItem()` из `session_items_screen.dart`:
     - `showMenuItemPicker(context, loungeId: _order.loungeId)` → если `null`/юзер отменил — выйти.
@@ -92,13 +92,13 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
   - Логирование: DEBUG перед вызовом мутации (параметры), INFO при успехе (обновлённое состояние заказа), WARN при ошибке (см. Task 7) — формат `[OrderDetail.method] message {data}` по конвенции `AppLogger`.
   - Файлы: `lib/screens/order/order_detail_screen.dart`
 
-- [ ] Task 6: Кнопка «Меню» в панели ввода чата (depends on: 5)
+- [x] Task 6: Кнопка «Меню» в панели ввода чата (depends on: 5)
   - В `_buildInput()` — рядом с `TextField` и кнопкой отправки, добавить `IconButton` (иконка `Icons.restaurant_menu` или `Icons.menu_book`) с тем же обработчиком `_addMenuItem` из Task 5 — никакой отдельной логики, только вторая точка входа к тому же экшену.
   - Видима только если `_order.isEditable` (та же проверка, что и в Task 5).
   - Логирование: отдельного логирования не требует — использует уже залогированный `_addMenuItem()` из Task 5.
   - Файлы: `lib/screens/order/order_detail_screen.dart`
 
-- [ ] Task 7: Обработка ошибок `addOrderItems` + перезагрузка состояния заказа (depends on: 5, 6)
+- [x] Task 7: Обработка ошибок `addOrderItems` + перезагрузка состояния заказа (depends on: 5, 6)
   - Общий метод `_reloadOrderState()`: запрос `GQLQueries.orders` через `_graphqlClient`, парсинг `Order.fromJson` по списку, поиск по id — переиспользовать уже существующую чистую функцию `findOrderById` из `lib/core/notifications/push_navigation.dart` (импортировать, не дублировать логику). При успехе — `setState(() => _order = found)`; если заказ не найден в списке — оставить текущее состояние и залогировать WARN.
   - В `_addMenuItem()` на ошибке мутации — маппинг по тексту ошибки (`result.exception?.graphqlErrors.firstOrNull?.message`), см. `order.txt` раздел 5:
     - `unauthorized: login required to add items to an order` — специальной обработки не требуется: `AuthState._handleUnauthenticated()` (глобальный `onUnauthenticated` в `_buildClient`) уже форсирует logout при протухшем токене на уровне GraphQL-клиента; на экране достаточно не падать и показать общий тост.
