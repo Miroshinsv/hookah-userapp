@@ -134,16 +134,9 @@ class GQLMutations {
     }
   ''';
 
-  static String registerDevice({
-    required String userId,
-    required String role,
-    required String fcmToken,
-    String? loungeId,
-  }) => '''
+  static String registerDevice({required String fcmToken, String? loungeId}) => '''
     mutation {
       registerDevice(
-        userId: ${jsonEncode(userId)}
-        role: ${jsonEncode(role)}
         fcmToken: ${jsonEncode(fcmToken)}
         ${loungeId != null ? 'loungeId: ${jsonEncode(loungeId)}' : ''}
       )

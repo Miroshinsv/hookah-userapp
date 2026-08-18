@@ -40,7 +40,7 @@ There's no backend subscription for session-item status changes, so the screen i
 
 `lib/core/notifications/push_service.dart` requests notification permission, fetches the FCM token, and listens for token refreshes. `AuthState` (`lib/core/auth/auth_state.dart`) uses it to:
 
-- Call `registerDevice(userId, role, fcmToken, loungeId)` after a successful login or restored session, and again whenever the token refreshes while logged in. `userId` comes straight from the `me` query; `role` comes from `login()`'s response, falling back to `me.roles.first` on session restore (a restored session never re-runs `login()`). The backend requires both — the call is skipped, not sent, if either is unavailable.
+- Call `registerDevice(fcmToken, loungeId)` after a successful login or restored session, and again whenever the token refreshes while logged in. The backend identifies the guest from the auth context (JWT claims) — `userId`/`role` are never GraphQL arguments here.
 - Call `unregisterDevice(fcmToken)` on logout — this mutation needs no auth, so it's safe to call even if the session is already invalid server-side.
 
 Both calls are **best-effort**: a failure is logged but never blocks login, session restore, or logout.
