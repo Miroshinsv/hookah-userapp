@@ -96,6 +96,10 @@ class GQLQueries {
         arrivalAt
         status
         createdAt
+        menuItems { id menuItemId name quantity unitPrice status }
+        hookahItems { id name flavor quantity unitPrice status }
+        subtotal
+        finalTotal
       }
     }
   ''';

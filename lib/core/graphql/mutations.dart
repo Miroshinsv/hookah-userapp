@@ -181,4 +181,30 @@ class GQLMutations {
       }
     }
   ''';
+
+  // Дозаказ позиций меню в уже существующий заказ (order.txt раздел 3) —
+  // hookahItems сознательно не передаётся, вне объёма этой фичи. Один
+  // элемент списка на вызов — соответствует однопозиционному UX
+  // showMenuItemPicker (тот же паттерн, что и addSessionItem).
+  static String addOrderItems({
+    required String orderId,
+    required String loungeId,
+    required String menuItemId,
+    int quantity = 1,
+  }) => '''
+    mutation {
+      addOrderItems(
+        orderId: ${jsonEncode(orderId)}
+        loungeId: ${jsonEncode(loungeId)}
+        menuItems: [{ menuItemId: ${jsonEncode(menuItemId)}, quantity: $quantity }]
+      ) {
+        id
+        status
+        menuItems { id menuItemId name quantity unitPrice status }
+        hookahItems { id name flavor quantity unitPrice status }
+        subtotal
+        finalTotal
+      }
+    }
+  ''';
 }
