@@ -82,12 +82,16 @@ void main() {
     expect(find.byIcon(Icons.restaurant_menu), findsNothing);
   });
 
-  testWidgets('does not show an items header when the order has no items', (tester) async {
+  testWidgets(
+      'does not show an items header but still shows "+ Меню" when the order has no items yet',
+      (tester) async {
     const order = Order(id: '1', loungeId: '2', status: 'new');
 
     await pumpOrderScreen(tester, order);
 
     expect(tester.takeException(), isNull);
+    expect(find.text('+ Меню'), findsOneWidget);
+    expect(find.byIcon(Icons.restaurant_menu), findsOneWidget);
     expect(find.text('Позиции заказа'), findsNothing);
   });
 }

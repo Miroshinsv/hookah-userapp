@@ -244,47 +244,52 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   // заголовок без содержимого.
   List<Widget> _buildOrderItemsSection() {
     final hasItems = _order.menuItems.isNotEmpty || _order.hookahItems.isNotEmpty;
-    if (!hasItems) return const [];
 
     return [
-      const SizedBox(height: 14),
-      const Text('Позиции заказа',
-          style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-      const SizedBox(height: 6),
-      for (final item in _order.menuItems)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text('${item.name} × ${item.quantity}',
+      // Список позиций рендерится только если он не пуст — не показываем
+      // пустой заголовок. Кнопка "+ Меню" ниже НЕ зависит от hasItems: она
+      // должна быть доступна и для только что созданного заказа без единой
+      // позиции — это единственный способ добавить самую первую.
+      if (hasItems) ...[
+        const SizedBox(height: 14),
+        const Text('Позиции заказа',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+        const SizedBox(height: 6),
+        for (final item in _order.menuItems)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text('${item.name} × ${item.quantity}',
+                      style: const TextStyle(color: Colors.grey)),
+                ),
+                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
                     style: const TextStyle(color: Colors.grey)),
-              ),
-              Text('${item.unitPrice.toStringAsFixed(0)} ₽',
-                  style: const TextStyle(color: Colors.grey)),
-            ],
+              ],
+            ),
           ),
-        ),
-      for (final item in _order.hookahItems)
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                    '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
+        for (final item in _order.hookahItems)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                      '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
+                      style: const TextStyle(color: Colors.grey)),
+                ),
+                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
                     style: const TextStyle(color: Colors.grey)),
-              ),
-              Text('${item.unitPrice.toStringAsFixed(0)} ₽',
-                  style: const TextStyle(color: Colors.grey)),
-            ],
+              ],
+            ),
           ),
-        ),
-      const SizedBox(height: 6),
-      Text('Итого: ${_order.finalTotal?.toStringAsFixed(0) ?? '—'} ₽',
-          style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text('Итого: ${_order.finalTotal?.toStringAsFixed(0) ?? '—'} ₽',
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+      ],
       if (_order.isEditable) ...[
         const SizedBox(height: 10),
         SizedBox(
