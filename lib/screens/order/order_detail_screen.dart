@@ -112,6 +112,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         if (isStaff && !_isAtBottom) _newInSession++;
       });
       if (!isStaff || _isAtBottom) _scrollToBottom();
+      // Действия персонала (подтверждение/отмена/удаление позиций) всегда
+      // сопровождаются системным сообщением в чате — по нему перезапрашиваем
+      // актуальное состояние заказа, а не полагаемся на локальный кэш
+      // позиций (order.txt раздел 3).
+      if (isStaff) {
+        AppLogger.d(_tag,
+            'staff message triggered order reload orderId=${_order.id}');
+        _reloadOrderState();
+      }
     });
   }
 
@@ -126,9 +135,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final fetched = raw
         .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
         .toList();
-    final hasNew = fetched.length > _messages.length;
+    final oldIds = _messages.map((m) => m.id).toSet();
+    final newOnes = fetched.where((m) => !oldIds.contains(m.id)).toList();
+    final hasNew = newOnes.isNotEmpty;
     setState(() => _messages = fetched);
     if (scroll || (hasNew && _isAtBottom)) _scrollToBottom();
+    // Подстраховка на случай, если подписка временно не доставила событие
+    // (например, реконнект WS) — 4-секундный поллинг чата всё равно подхватит
+    // системное сообщение персонала и перезапросит состояние заказа.
+    if (newOnes.any((m) => SenderRole.isStaff(m.senderRole))) {
+      AppLogger.d(_tag,
+          'staff message triggered order reload orderId=${_order.id}');
+      _reloadOrderState();
+    }
   }
 
   void _scrollToBottom() {
@@ -257,36 +276,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
         const SizedBox(height: 6),
         for (final item in _order.menuItems)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text('${item.name} × ${item.quantity}',
-                      style: const TextStyle(color: Colors.grey)),
-                ),
-                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
-                    style: const TextStyle(color: Colors.grey)),
-              ],
-            ),
-          ),
+          _buildOrderItemRow(
+              '${item.name} × ${item.quantity}', item.unitPrice, item.status),
         for (final item in _order.hookahItems)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                      '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
-                      style: const TextStyle(color: Colors.grey)),
-                ),
-                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
-                    style: const TextStyle(color: Colors.grey)),
-              ],
-            ),
-          ),
+          _buildOrderItemRow(
+              '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
+              item.unitPrice,
+              item.status),
         const SizedBox(height: 6),
         Text('Итого: ${_order.finalTotal?.toStringAsFixed(0) ?? '—'} ₽',
             style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -306,6 +302,45 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
       ],
     ];
+  }
+
+  // Отменённая персоналом позиция (status: "canceled") остаётся в списке, но
+  // помечается зачёркиванием и меткой "Отменено" — гость видит, что именно
+  // отменили, даже не читая системное сообщение в чате (order.txt раздел
+  // 1.b). Безвозвратно удалённые позиции (только admin) сюда не попадают —
+  // их просто больше нет в menuItems/hookahItems после перезагрузки заказа.
+  Widget _buildOrderItemRow(String label, double unitPrice, String status) {
+    final canceled = status == 'canceled';
+    final style = TextStyle(
+      color: Colors.grey,
+      decoration: canceled ? TextDecoration.lineThrough : null,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: Text(label, style: style)),
+                if (canceled) ...[
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Отменено',
+                    style: TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Text('${unitPrice.toStringAsFixed(0)} ₽', style: style),
+        ],
+      ),
+    );
   }
 
   // Общий обработчик для обеих точек входа ("+ Меню" в блоке заказа и

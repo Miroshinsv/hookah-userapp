@@ -58,7 +58,7 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
 
 ### Phase 2: Экран заказа — отражение действий персонала
 
-- [ ] Task 3: Визуально отличать отменённые позиции в списке позиций заказа (depends on: none)
+- [x] Task 3: Визуально отличать отменённые позиции в списке позиций заказа (depends on: none)
   - В `_buildOrderItemsSection()` (`lib/screens/order/order_detail_screen.dart`, метод строится вокруг `_order.menuItems`/`_order.hookahItems`) вынести общий рендер строки позиции в приватный метод `Widget _buildOrderItemRow(String label, int quantity, double unitPrice, String status)` вместо двух почти идентичных инлайн `Padding`/`Row` блоков.
   - Если `status == 'canceled'` — применить `TextDecoration.lineThrough` к тексту названия/цены (`Colors.grey` оставить) и добавить небольшую метку `"Отменено"` (`Colors.redAccent`, `fontSize: 11`, `fontWeight: FontWeight.w600`) рядом с названием. Позиция остаётся в списке (не скрывается) — так гость видит, что конкретно отменили, даже не читая чат (раздел 1.b ТЗ: "позиция остаётся в списке").
   - Для позиций без `status == 'canceled'` (т.е. `'new'` и любые другие нераспознанные значения) — рендер как раньше, без изменений внешнего вида.
@@ -67,7 +67,7 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
   - Логирование: не требуется — чистый рендеринг уже загруженного состояния `_order`, без сетевых вызовов (как и было в этом методе ранее).
   - Файлы: `lib/screens/order/order_detail_screen.dart`
 
-- [ ] Task 4: Перезапрос состояния заказа при новом сообщении от персонала (depends on: 1)
+- [x] Task 4: Перезапрос состояния заказа при новом сообщении от персонала (depends on: 1)
   - В `_subscribeMessages()` (`lib/screens/order/order_detail_screen.dart:97-115`) — после `setState` с добавлением нового сообщения, если `isStaff` (уже вычисляется через `SenderRole.isStaff` из Task 1) — вызвать `_reloadOrderState()` (fire-and-forget, без `await`, по аналогии с уже существующим вызовом `_maybeShowFeedbackDialog()` в `_buildOrderInfo()`). Переиспользует уже готовый и протестированный `_reloadOrderState()` (строки 400-416) — без дублирования логики загрузки `orders`/поиска по id.
   - В `_fetchMessages()` (строки 117-131) — заменить нынешнюю грубую эвристику `hasNew = fetched.length > _messages.length` на точное вычисление новых сообщений по `id` (`final oldIds = _messages.map((m) => m.id).toSet(); final newOnes = fetched.where((m) => !oldIds.contains(m.id)).toList(); final hasNew = newOnes.isNotEmpty;`) — старая эвристика на основе одной только длины списка не различает "какие именно сообщения новые" и не позволяет проверить их отправителя. После `setState(() => _messages = fetched)` — если `newOnes.any((m) => SenderRole.isStaff(m.senderRole))`, вызвать `_reloadOrderState()`. Это подстраховка на случай, если подписка `messageCreatedForOrder` временно не доставила событие (реконнект WS и т.п.), а 4-секундный поллинг чата его всё равно подхватил.
   - Цель обоих изменений — реализовать явную рекомендацию раздела 3 `order.txt`: не полагаться на локально закэшированный список позиций после действия персонала, а перезапрашивать актуальное состояние заказа (позиции/статус/`subtotal`/`finalTotal`) сразу по приходу системного сообщения в чат.
