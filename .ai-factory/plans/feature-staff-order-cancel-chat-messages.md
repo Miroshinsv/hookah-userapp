@@ -78,18 +78,18 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
 
 ### Phase 3: Тесты
 
-- [ ] Task 5: Unit-тесты `SenderRole.isStaff` — новый файл `test/core/chat/sender_role_test.dart` (depends on: 1)
+- [x] Task 5: Unit-тесты `SenderRole.isStaff` — новый файл `test/core/chat/sender_role_test.dart` (depends on: 1)
   - По образцу `test/core/utils/status_helper_test.dart` (если существует) или любого простого unit-теста моделей проекта: `isStaff('user') == false`; `isStaff('staff') == true`; `isStaff('admin') == true`; `isStaff('owner') == true`; `isStaff('deputy') == true`; `isStaff('') == true` (пустая строка — не `'user'`, значит по текущей семантике трактуется как персонал; зафиксировать это поведение тестом, а не оставлять неявным).
   - Логирование: не применимо — unit-тест чистой функции.
   - Файлы: `test/core/chat/sender_role_test.dart`
 
-- [ ] Task 6: Widget-тесты отображения отменённых позиций — расширить `test/screens/order/order_detail_screen_test.dart` (depends on: 3)
+- [x] Task 6: Widget-тесты отображения отменённых позиций — расширить `test/screens/order/order_detail_screen_test.dart` (depends on: 3)
   - По уже существующему в этом файле паттерну `pumpOrderScreen` (лёгкий regression-стиль, `GraphQLClient` на невалидный URL, без сетевого мокинга — начальное состояние заказа передаётся напрямую через `RouteSettings.arguments`): новый тест с заказом, где один `OrderMenuItem` имеет `status: 'canceled'`, а другой — `status: 'new'`.
   - Проверить: оба названия позиций по-прежнему найдены в дереве виджетов (`find.textContaining(...)`, позиция не скрывается); у отменённой позиции найден текст `"Отменено"` (`findsOneWidget`); у активной позиции — `findsNothing` в её локальном окружении (тест на `finalTotal` не менять, значение приходит из уже готового поля `_order.finalTotal`).
   - Логирование: не применимо — widget-тест.
   - Файлы: `test/screens/order/order_detail_screen_test.dart`
 
-- [ ] Task 7: Widget-тест перезапроса заказа по сообщению персонала — новый тест-файл или группа в `test/screens/order/order_detail_screen_test.dart` (depends on: 4)
+- [x] Task 7: Widget-тест перезапроса заказа по сообщению персонала — новый тест-файл или группа в `test/screens/order/order_detail_screen_test.dart` (depends on: 4)
   - Единственный способ реалистично проверить Task 4 без сетевого мокинга — использовать уже установленный в проекте паттерн `mocktail` + `MockGraphQLClient extends Mock implements GraphQLClient {}` (см. `test/screens/table/menu_item_picker_test.dart:7`, `when(() => client.query(any()))...`, `registerFallbackValue(QueryOptions(...))` в `setUpAll`).
   - Стубы:
     - `client.query(any())` — различать по содержимому `QueryOptions.document` (проверка `opts.document.toString()`/исходную GraphQL-строку на вхождение `'messages('` вs `'orders('`, по аналогии с тем, как `stubMenuAndCategories` в `menu_item_picker_test.dart` различает вызовы по порядковому индексу): на `GQLQueries.messages(...)` вернуть пустой список (или соответствующий фейковый ответ), на `GQLQueries.orders` — заказ с обновлённым `finalTotal`/составом позиций (симулирует результат `_reloadOrderState()`).
