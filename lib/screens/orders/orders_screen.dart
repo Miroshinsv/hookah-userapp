@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/chat/sender_role.dart';
 import '../../core/chat/unread_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/graphql/subscriptions.dart';
@@ -122,7 +123,8 @@ class OrdersScreenState extends State<OrdersScreen> {
       final text       = msg['text'] as String? ?? '';
 
       // Уведомления и бейджик только для сообщений от сотрудников
-      if (senderRole == 'staff' && orderId.isNotEmpty) {
+      // (staff/admin/owner/deputy — все роли персонала, см. order.txt).
+      if (SenderRole.isStaff(senderRole) && orderId.isNotEmpty) {
         final unread = context.read<UnreadState>();
         unread.onNewStaffMessage(orderId);
         // Показать пуш только если пользователь не в этом чате

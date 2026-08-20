@@ -30,11 +30,15 @@ class NotificationService {
     AppLogger.i(_tag, 'initialized');
   }
 
+  // payload = orderId, чтобы тап по уведомлению открывал конкретный заказ
+  // (по аналогии с showOrderStatusPush) — важно теперь, когда через этот же
+  // канал приходят системные сообщения об отмене/удалении позиций персоналом.
   static Future<void> showChatMessage({
     required String orderId,
     required String text,
   }) async {
     if (!_initialized) return;
+    AppLogger.d(_tag, 'showChatMessage orderId=$orderId');
     try {
       const androidDetails = AndroidNotificationDetails(
         _channelId,
@@ -52,6 +56,7 @@ class NotificationService {
         'Новое сообщение',
         text,
         details,
+        payload: orderId,
       );
     } catch (e) {
       AppLogger.w(_tag, 'show failed', e);

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/chat/sender_role.dart';
 import '../../core/chat/unread_state.dart';
 import '../../core/graphql/mutations.dart';
 import '../../core/graphql/queries.dart';
@@ -105,7 +106,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       final msg = ChatMessage.fromJson(raw);
       final isNew = !_messages.any((m) => m.id == msg.id);
       if (!isNew) return;
-      final isStaff = msg.senderRole != 'user';
+      final isStaff = SenderRole.isStaff(msg.senderRole);
       setState(() {
         _messages = [..._messages, msg];
         if (isStaff && !_isAtBottom) _newInSession++;
@@ -483,7 +484,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       itemCount: _messages.length,
       itemBuilder: (ctx, i) {
         final msg  = _messages[i];
-        final isMe = msg.senderRole == 'user' ||
+        final isMe = !SenderRole.isStaff(msg.senderRole) ||
             (phone.isNotEmpty && msg.senderId == phone);
 
         const myBg    = Color(0xFF3D2800);
