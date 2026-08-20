@@ -10,8 +10,11 @@ import '../../core/graphql/subscriptions.dart';
 import '../../core/models/lounge.dart';
 import '../../core/models/message.dart';
 import '../../core/models/order.dart';
+import '../../core/notifications/push_navigation.dart' show findOrderById;
+import '../../core/utils/logger.dart';
 import '../../widgets/feedback_sheet.dart';
 import '../../widgets/status_badge.dart';
+import '../table/menu_item_picker.dart';
 
 const _terminalFeedbackStatuses = {
   'completed',
@@ -28,6 +31,8 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
+  static const _tag = 'OrderDetail';
+
   final _messageCtrl = TextEditingController();
   final _scrollCtrl  = ScrollController();
   List<ChatMessage> _messages = [];
@@ -39,6 +44,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   int _newInSession = 0;   // новые сообщения от сотрудника, пока прокручено вверх
   bool _isAtBottom  = true;
   bool _feedbackShown = false;
+  bool _addingMenuItem = false;
   late GraphQLClient _graphqlClient;
   late UnreadState _unreadState;
 
@@ -224,11 +230,189 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   StatusBadge(status: _order.status),
                 ],
               ),
+              ..._buildOrderItemsSection(),
             ],
           ),
         );
       },
     );
+  }
+
+  // Позиции заказа — только отображение, без кнопок удаления/отмены (роль
+  // "user" не имеет прав на removeOrderItems/updateOrderItemsStatus, см.
+  // order.txt раздел 4). Пустой список не рендерится вовсе — не показываем
+  // заголовок без содержимого.
+  List<Widget> _buildOrderItemsSection() {
+    final hasItems = _order.menuItems.isNotEmpty || _order.hookahItems.isNotEmpty;
+
+    return [
+      // Список позиций рендерится только если он не пуст — не показываем
+      // пустой заголовок. Кнопка "+ Меню" ниже НЕ зависит от hasItems: она
+      // должна быть доступна и для только что созданного заказа без единой
+      // позиции — это единственный способ добавить самую первую.
+      if (hasItems) ...[
+        const SizedBox(height: 14),
+        const Text('Позиции заказа',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+        const SizedBox(height: 6),
+        for (final item in _order.menuItems)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text('${item.name} × ${item.quantity}',
+                      style: const TextStyle(color: Colors.grey)),
+                ),
+                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
+                    style: const TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+        for (final item in _order.hookahItems)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                      '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
+                      style: const TextStyle(color: Colors.grey)),
+                ),
+                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
+                    style: const TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
+        Text('Итого: ${_order.finalTotal?.toStringAsFixed(0) ?? '—'} ₽',
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+      ],
+      if (_order.isEditable) ...[
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _addingMenuItem ? null : _addMenuItem,
+            icon: _addingMenuItem
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.add),
+            label: const Text('+ Меню'),
+          ),
+        ),
+      ],
+    ];
+  }
+
+  // Общий обработчик для обеих точек входа ("+ Меню" в блоке заказа и
+  // "Меню" в панели чата) — дозаказ позиций через addOrderItems (order.txt
+  // раздел 3). Позиции только добавляются, удаление/отмена пользователю
+  // недоступны в принципе (см. order.txt раздел 4) — соответствующих
+  // элементов управления в UI нет и не будет.
+  Future<void> _addMenuItem() async {
+    final picked = await showMenuItemPicker(context, loungeId: _order.loungeId);
+    if (picked == null || !mounted) return;
+
+    setState(() => _addingMenuItem = true);
+    AppLogger.d(
+      _tag,
+      'addOrderItems orderId=${_order.id} menuItemId=${picked.item.itemId} quantity=${picked.quantity}',
+    );
+
+    final result = await _graphqlClient.mutate(MutationOptions(
+      document: gql(GQLMutations.addOrderItems(
+        orderId: _order.id,
+        loungeId: _order.loungeId,
+        menuItemId: picked.item.itemId,
+        quantity: picked.quantity,
+      )),
+    ));
+
+    if (!mounted) return;
+    setState(() => _addingMenuItem = false);
+
+    if (result.hasException) {
+      _handleAddOrderItemsError(result.exception);
+      return;
+    }
+
+    final data = result.data?['addOrderItems'] as Map<String, dynamic>?;
+    if (data == null) return;
+    setState(() {
+      _order = _order.copyWith(
+        status: data['status'] as String?,
+        menuItems: (data['menuItems'] as List<dynamic>?)
+            ?.map((e) => OrderMenuItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        hookahItems: (data['hookahItems'] as List<dynamic>?)
+            ?.map((e) => OrderHookahItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        subtotal: (data['subtotal'] as num?)?.toDouble(),
+        finalTotal: (data['finalTotal'] as num?)?.toDouble(),
+      );
+    });
+    AppLogger.i(
+      _tag,
+      'addOrderItems ok orderId=${_order.id} menuItems=${_order.menuItems.length} '
+      'hookahItems=${_order.hookahItems.length} finalTotal=${_order.finalTotal}',
+    );
+  }
+
+  // Реакция на ошибки addOrderItems по order.txt разделу 5. "unauthorized"
+  // отдельно не обрабатываем — AuthState._handleUnauthenticated() уже
+  // форсирует logout на уровне общего GraphQLClient при протухшем токене.
+  void _handleAddOrderItemsError(OperationException? exception) {
+    final message = exception?.graphqlErrors.firstOrNull?.message;
+    AppLogger.w(_tag, 'addOrderItems failed orderId=${_order.id}: $message', exception);
+
+    if (message != null &&
+        (message.contains('invalid orderId') || message.contains('invalid loungeId'))) {
+      AppLogger.e(
+        _tag,
+        'addOrderItems client bug orderId=${_order.id} loungeId=${_order.loungeId}: $message',
+      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Не удалось добавить позицию')));
+      _reloadOrderState();
+      return;
+    }
+
+    if (message != null && message.contains('no longer be modified')) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Заказ уже закрыт, дозаказ недоступен')));
+      _reloadOrderState();
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message ?? 'Не удалось добавить позицию')),
+    );
+    _reloadOrderState();
+  }
+
+  // Перезагружает состояние заказа с сервера после ошибки addOrderItems —
+  // экран не должен оставаться в устаревшем состоянии (order.txt раздел 5).
+  // Переиспользует уже протестированную чистую функцию findOrderById из
+  // push_navigation.dart вместо дублирования поиска по id.
+  Future<void> _reloadOrderState() async {
+    final result = await _graphqlClient.query(QueryOptions(
+      document: gql(GQLQueries.orders),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted || result.data == null) return;
+
+    final raw = (result.data!['orders'] as List<dynamic>?) ?? const [];
+    final orders = raw.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
+    final found = findOrderById(orders, _order.id);
+    if (found == null) {
+      AppLogger.w(_tag, 'reloadOrderState: order not found orderId=${_order.id}');
+      return;
+    }
+    setState(() => _order = found);
+    AppLogger.d(_tag, 'reloadOrderState ok orderId=${_order.id} status=${_order.status}');
   }
 
   Widget _buildChatWithBadge() {
@@ -383,6 +567,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         child: Row(
           children: [
+            if (_order.isEditable) ...[
+              IconButton(
+                onPressed: _addingMenuItem ? null : _addMenuItem,
+                icon: const Icon(Icons.restaurant_menu),
+                tooltip: 'Меню',
+              ),
+              const SizedBox(width: 4),
+            ],
             Expanded(
               child: TextField(
                 controller: _messageCtrl,

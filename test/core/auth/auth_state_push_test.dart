@@ -18,7 +18,6 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(MutationOptions(document: gql('mutation { noop }')));
-    registerFallbackValue(QueryOptions(document: gql('query { noop }')));
 
     // logout() clears stored auth state via flutter_secure_storage, which has
     // no platform implementation in a plain unit test — stub its channel.
@@ -62,80 +61,5 @@ void main() {
     await authState.logout();
 
     expect(authState.isLoggedIn, isFalse);
-  });
-
-  // fetchMe() calls gqlClient.value.query(...) directly without rebuilding the
-  // client (unlike login()/init()), so it can be exercised against a mock.
-  test('fetchMe() captures userId and falls back to me.roles when role is unset', () async {
-    final authState = AuthState();
-    final mockClient = MockGraphQLClient();
-    final options = QueryOptions(document: gql('query { me { id userId roles } }'));
-    when(() => mockClient.query(any())).thenAnswer(
-      (_) async => options.createResult(
-        source: QueryResultSource.network,
-        data: {
-          'me': {
-            'id': 'staff-1',
-            'userId': 'user-1',
-            'roles': ['guest', 'staff'],
-          },
-        },
-      ),
-    );
-    authState.gqlClient.value = mockClient;
-
-    await authState.fetchMe();
-
-    expect(authState.userId, 'user-1');
-    expect(authState.role, 'guest');
-  });
-
-  test('fetchMe() logs and leaves userId null when the response omits it', () async {
-    final authState = AuthState();
-    final mockClient = MockGraphQLClient();
-    final options = QueryOptions(document: gql('query { me { id userId roles } }'));
-    when(() => mockClient.query(any())).thenAnswer(
-      (_) async => options.createResult(
-        source: QueryResultSource.network,
-        data: {
-          'me': {'id': 'staff-1'},
-        },
-      ),
-    );
-    authState.gqlClient.value = mockClient;
-
-    await authState.fetchMe();
-
-    expect(authState.userId, isNull);
-  });
-
-  group('AuthState.canRegisterDevice', () {
-    test('true when userId, role and fcmToken are all present', () {
-      expect(
-        AuthState.canRegisterDevice(userId: 'u1', role: 'guest', fcmToken: 'tok'),
-        isTrue,
-      );
-    });
-
-    test('false when userId is missing', () {
-      expect(
-        AuthState.canRegisterDevice(userId: null, role: 'guest', fcmToken: 'tok'),
-        isFalse,
-      );
-    });
-
-    test('false when role is missing', () {
-      expect(
-        AuthState.canRegisterDevice(userId: 'u1', role: null, fcmToken: 'tok'),
-        isFalse,
-      );
-    });
-
-    test('false when fcmToken is missing', () {
-      expect(
-        AuthState.canRegisterDevice(userId: 'u1', role: 'guest', fcmToken: null),
-        isFalse,
-      );
-    });
   });
 }

@@ -17,7 +17,6 @@ class AuthState extends ChangeNotifier {
   String? _role;
   String? _loungeId;
   String? _staffId;
-  String? _userId;
 
   AuthState() {
     gqlClient = ValueNotifier(_buildClient(null));
@@ -32,7 +31,6 @@ class AuthState extends ChangeNotifier {
   String? get role => _role;
   String? get loungeId => _loungeId;
   String? get staffId => _staffId;
-  String? get userId => _userId;
 
   static const _tag = 'Auth';
 
@@ -83,36 +81,15 @@ class AuthState extends ChangeNotifier {
     await _registerDeviceBestEffort();
   }
 
-  // userId и role обязательны на бэкенде — вынесено в чистую функцию, чтобы
-  // проверить решение "отправлять/пропустить" без сети/GraphQL-мока.
-  @visibleForTesting
-  static bool canRegisterDevice({
-    required String? userId,
-    required String? role,
-    required String? fcmToken,
-  }) =>
-      userId != null && userId.isNotEmpty &&
-      role != null && role.isNotEmpty &&
-      fcmToken != null && fcmToken.isNotEmpty;
-
   // Best-effort: регистрация FCM-токена гостя на бэкенде. Никогда не должна
   // блокировать или ронять login()/init() — ошибки только логируются.
   Future<void> _registerDeviceBestEffort() async {
     if (!isLoggedIn) return;
     final fcmToken = PushService.token;
-    AppLogger.d(_tag, 'registerDevice attempt userId=$_userId role=$_role loungeId=$_loungeId');
-    if (!canRegisterDevice(userId: _userId, role: _role, fcmToken: fcmToken)) {
-      AppLogger.w(_tag, 'registerDevice skipped — missing userId/role');
-      return;
-    }
+    if (fcmToken == null) return;
     try {
       final result = await gqlClient.value.mutate(MutationOptions(
-        document: gql(GQLMutations.registerDevice(
-          userId: _userId!,
-          role: _role!,
-          fcmToken: fcmToken!,
-          loungeId: _loungeId,
-        )),
+        document: gql(GQLMutations.registerDevice(fcmToken: fcmToken, loungeId: _loungeId)),
       ));
       if (result.hasException) {
         AppLogger.w(_tag, 'registerDevice failed', result.exception);
@@ -143,24 +120,7 @@ class AuthState extends ChangeNotifier {
         await _storage.writeStaffId(staffId);
       }
 
-      final userId = me['userId'] as String?;
-      if (userId != null) {
-        _userId = userId;
-      } else {
-        AppLogger.w(_tag, 'fetchMe response missing userId');
-      }
-
-      // login() задаёт _role из ответа loginUser; при восстановлении сессии
-      // в init() он не приходит заново, поэтому здесь подстраховываемся
-      // ролью из me.roles, если _role ещё не задан.
-      if (_role == null) {
-        final roles = (me['roles'] as List?)?.cast<String>();
-        if (roles != null && roles.isNotEmpty) {
-          _role = roles.first;
-        }
-      }
-
-      AppLogger.i(_tag, 'fetchMe ok staffId=$_staffId userId=$_userId role=$_role');
+      AppLogger.i(_tag, 'fetchMe ok staffId=$_staffId');
       notifyListeners();
     } catch (e, stack) {
       AppLogger.w(_tag, 'fetchMe failed', e, stack);
@@ -178,7 +138,6 @@ class AuthState extends ChangeNotifier {
     _role      = null;
     _loungeId  = null;
     _staffId   = null;
-    _userId    = null;
     gqlClient.value = _buildClient(null);
     notifyListeners();
   }

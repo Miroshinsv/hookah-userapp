@@ -134,16 +134,9 @@ class GQLMutations {
     }
   ''';
 
-  static String registerDevice({
-    required String userId,
-    required String role,
-    required String fcmToken,
-    String? loungeId,
-  }) => '''
+  static String registerDevice({required String fcmToken, String? loungeId}) => '''
     mutation {
       registerDevice(
-        userId: ${jsonEncode(userId)}
-        role: ${jsonEncode(role)}
         fcmToken: ${jsonEncode(fcmToken)}
         ${loungeId != null ? 'loungeId: ${jsonEncode(loungeId)}' : ''}
       )
@@ -178,6 +171,32 @@ class GQLMutations {
         quantity
         status
         createdAt
+      }
+    }
+  ''';
+
+  // Дозаказ позиций меню в уже существующий заказ (order.txt раздел 3) —
+  // hookahItems сознательно не передаётся, вне объёма этой фичи. Один
+  // элемент списка на вызов — соответствует однопозиционному UX
+  // showMenuItemPicker (тот же паттерн, что и addSessionItem).
+  static String addOrderItems({
+    required String orderId,
+    required String loungeId,
+    required String menuItemId,
+    int quantity = 1,
+  }) => '''
+    mutation {
+      addOrderItems(
+        orderId: ${jsonEncode(orderId)}
+        loungeId: ${jsonEncode(loungeId)}
+        menuItems: [{ menuItemId: ${jsonEncode(menuItemId)}, quantity: $quantity }]
+      ) {
+        id
+        status
+        menuItems { id menuItemId name quantity unitPrice status }
+        hookahItems { id name flavor quantity unitPrice status }
+        subtotal
+        finalTotal
       }
     }
   ''';
