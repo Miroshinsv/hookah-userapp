@@ -21,6 +21,7 @@ void main() {
     registerFallbackValue(QueryOptions(document: gql('query { noop }')));
     registerFallbackValue(
         SubscriptionOptions(document: gql('subscription { noop }')));
+    registerFallbackValue(MutationOptions(document: gql('mutation { noop }')));
   });
 
   Future<void> pumpOrderScreen(WidgetTester tester, Order order) async {
@@ -194,10 +195,10 @@ void main() {
       final msgController = StreamController<QueryResult<Object?>>();
       addTearDown(msgController.close);
 
-      // Первый subscribe() — messageCreatedForOrder (из _subscribeMessages);
-      // второй — orderStatusChanged (из виджета Subscription в
-      // _buildOrderInfo). Порядок фиксирован жизненным циклом State
-      // (didChangeDependencies выполняется раньше build).
+      // Первый subscribe() — newMessage (из _subscribeMessages); второй —
+      // orderStatusChanged (из виджета Subscription в _buildOrderInfo).
+      // Порядок фиксирован жизненным циклом State (didChangeDependencies
+      // выполняется раньше build).
       var subscribeCallIndex = 0;
       when(() => client.subscribe(any())).thenAnswer((_) {
         final isMessageSub = subscribeCallIndex == 0;
@@ -207,17 +208,33 @@ void main() {
             : const Stream<QueryResult<Object?>>.empty();
       });
 
-      // Первый query() — GQLQueries.messages (пустой чат при открытии);
-      // любой следующий — GQLQueries.orders, вызванный _reloadOrderState()
-      // после того, как в поток подписки придёт сообщение от персонала.
+      // Вызовы query() по порядку: (0) GQLQueries.messages при открытии
+      // экрана — пустой чат; (1) GQLQueries.messages, вызванный
+      // _subscribeMessages() через _fetchMessages() после события подписки —
+      // возвращает настоящее сообщение с реальным id (подписка сама id не
+      // содержит); (2) GQLQueries.orders, вызванный _reloadOrderState() из
+      // _fetchMessages(), т.к. среди новых сообщений есть от персонала.
       var queryCallIndex = 0;
       when(() => client.query(any())).thenAnswer((invocation) async {
         final opts = invocation.positionalArguments[0] as QueryOptions;
-        final isFirstCall = queryCallIndex == 0;
+        final callIndex = queryCallIndex;
         queryCallIndex++;
-        if (isFirstCall) {
+        if (callIndex == 0) {
           return opts.createResult(
               source: QueryResultSource.network, data: {'messages': []});
+        }
+        if (callIndex == 1) {
+          return opts.createResult(source: QueryResultSource.network, data: {
+            'messages': [
+              {
+                'id': 'msg1',
+                'senderId': 'staff-1',
+                'senderRole': 'staff',
+                'text': 'Из вашего заказа отменили\nКола х2',
+                'createdAt': '2026-08-20T12:00:00Z',
+              },
+            ],
+          });
         }
         return opts.createResult(source: QueryResultSource.network, data: {
           'orders': [
@@ -265,20 +282,22 @@ void main() {
       expect(find.textContaining('Итого: 300'), findsOneWidget);
       expect(find.text('Отменено'), findsNothing);
 
-      // Персонал отменил позицию — приходит системное сообщение в чат.
+      // Персонал отменил позицию — приходит realtime-событие newMessage для
+      // текущего заказа. Payload не содержит id/createdAt — это триггер,
+      // не готовое сообщение (см. Backend Contract Reference в плане фичи).
       msgController.add(QueryResult(
         source: QueryResultSource.network,
         options: SubscriptionOptions(document: gql('subscription { noop }')),
         data: {
-          'messageCreated': {
-            'id': 'msg1',
+          'newMessage': {
+            'orderId': '1',
             'senderId': 'staff-1',
             'senderRole': 'staff',
             'text': 'Из вашего заказа отменили\nКола х2',
-            'createdAt': '2026-08-20T12:00:00Z',
           },
         },
       ));
+      await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
       await tester.pump(const Duration(milliseconds: 50));
 
@@ -286,6 +305,125 @@ void main() {
       // позиция теперь отменена и Итого пересчитан.
       expect(find.text('Отменено'), findsOneWidget);
       expect(find.textContaining('Итого: 0'), findsOneWidget);
+    });
+
+    testWidgets(
+        'a newMessage event for a different order does not trigger a refetch',
+        (tester) async {
+      final client = MockGraphQLClient();
+      final msgController = StreamController<QueryResult<Object?>>();
+      addTearDown(msgController.close);
+
+      var subscribeCallIndex = 0;
+      when(() => client.subscribe(any())).thenAnswer((_) {
+        final isMessageSub = subscribeCallIndex == 0;
+        subscribeCallIndex++;
+        return isMessageSub
+            ? msgController.stream
+            : const Stream<QueryResult<Object?>>.empty();
+      });
+
+      var queryCallCount = 0;
+      when(() => client.query(any())).thenAnswer((invocation) async {
+        queryCallCount++;
+        final opts = invocation.positionalArguments[0] as QueryOptions;
+        return opts.createResult(
+            source: QueryResultSource.network, data: {'messages': []});
+      });
+
+      const order = Order(id: '1', loungeId: '2', status: 'in_progress');
+
+      await pumpWithClient(tester, client, order);
+      expect(tester.takeException(), isNull);
+      final callsAfterOpen = queryCallCount;
+
+      // Событие относится к другому заказу того же гостя — экран заказа #1
+      // не должен на него реагировать (клиентский фильтр по orderId).
+      msgController.add(QueryResult(
+        source: QueryResultSource.network,
+        options: SubscriptionOptions(document: gql('subscription { noop }')),
+        data: {
+          'newMessage': {
+            'orderId': '999',
+            'senderId': 'staff-1',
+            'senderRole': 'staff',
+            'text': 'Другой заказ',
+          },
+        },
+      ));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(queryCallCount, callsAfterOpen);
+    });
+  });
+
+  group('sendMessage error handling', () {
+    Future<void> pumpWithClient(
+        WidgetTester tester, MockGraphQLClient client, Order order) async {
+      await tester.pumpWidget(
+        GraphQLProvider(
+          client: ValueNotifier(client),
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider<UnreadState>(create: (_) => UnreadState()),
+              ChangeNotifierProvider<AuthState>(create: (_) => AuthState()),
+            ],
+            child: MaterialApp(
+              home: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                    settings: RouteSettings(arguments: {'order': order}),
+                    builder: (_) => const OrderDetailScreen(),
+                  )),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    }
+
+    testWidgets(
+        'shows a SnackBar and keeps the draft text when sendMessage fails',
+        (tester) async {
+      final client = MockGraphQLClient();
+
+      when(() => client.subscribe(any()))
+          .thenAnswer((_) => const Stream<QueryResult<Object?>>.empty());
+      when(() => client.query(any())).thenAnswer((invocation) async {
+        final opts = invocation.positionalArguments[0] as QueryOptions;
+        return opts.createResult(
+            source: QueryResultSource.network, data: {'messages': []});
+      });
+
+      var mutateCallCount = 0;
+      when(() => client.mutate(any())).thenAnswer((invocation) async {
+        mutateCallCount++;
+        final opts = invocation.positionalArguments[0] as MutationOptions;
+        return opts.createResult(
+          source: QueryResultSource.network,
+          exception: OperationException(
+            graphqlErrors: const [GraphQLError(message: 'forbidden')],
+          ),
+        );
+      });
+
+      const order = Order(id: '1', loungeId: '2', status: 'in_progress');
+      await pumpWithClient(tester, client, order);
+
+      await tester.enterText(find.byType(TextField), 'Добавьте лёд');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(find.text('forbidden'), findsOneWidget);
+      expect(find.text('Добавьте лёд'), findsOneWidget);
+      expect(mutateCallCount, 1);
     });
   });
 }
