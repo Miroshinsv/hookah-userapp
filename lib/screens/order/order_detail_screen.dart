@@ -96,31 +96,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   void _subscribeMessages() {
+    // Реальная подписка бэкенда глобальная (без аргумента orderId) — сервер
+    // не заполняет id/createdAt в её payload, поэтому она используется только
+    // как триггер рефетча messages(), а не как источник готовой модели
+    // ChatMessage (см. Backend Contract Reference в плане фичи).
     final stream = _graphqlClient.subscribe(SubscriptionOptions(
-      document: gql(GQLSubscriptions.messageCreatedForOrder(_order.id)),
+      document: gql(GQLSubscriptions.newMessage),
     ));
     _msgSub = stream.listen((result) {
       if (!mounted || result.data == null) return;
-      final raw = result.data!['messageCreated'] as Map<String, dynamic>?;
+      final raw = result.data!['newMessage'] as Map<String, dynamic>?;
       if (raw == null) return;
-      final msg = ChatMessage.fromJson(raw);
-      final isNew = !_messages.any((m) => m.id == msg.id);
-      if (!isNew) return;
-      final isStaff = SenderRole.isStaff(msg.senderRole);
-      setState(() {
-        _messages = [..._messages, msg];
-        if (isStaff && !_isAtBottom) _newInSession++;
-      });
-      if (!isStaff || _isAtBottom) _scrollToBottom();
-      // Действия персонала (подтверждение/отмена/удаление позиций) всегда
-      // сопровождаются системным сообщением в чате — по нему перезапрашиваем
-      // актуальное состояние заказа, а не полагаемся на локальный кэш
-      // позиций (order.txt раздел 3).
-      if (isStaff) {
-        AppLogger.d(_tag,
-            'staff message triggered order reload orderId=${_order.id}');
-        _reloadOrderState();
-      }
+      if ((raw['orderId'] as String?) != _order.id) return;
+      AppLogger.d(_tag,
+          'newMessage event for own order, refetching orderId=${_order.id}');
+      _fetchMessages();
     });
   }
 
@@ -138,12 +128,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final oldIds = _messages.map((m) => m.id).toSet();
     final newOnes = fetched.where((m) => !oldIds.contains(m.id)).toList();
     final hasNew = newOnes.isNotEmpty;
-    setState(() => _messages = fetched);
+    final newStaffCount =
+        newOnes.where((m) => SenderRole.isStaff(m.senderRole)).length;
+    setState(() {
+      _messages = fetched;
+      if (newStaffCount > 0 && !_isAtBottom) _newInSession += newStaffCount;
+    });
     if (scroll || (hasNew && _isAtBottom)) _scrollToBottom();
     // Подстраховка на случай, если подписка временно не доставила событие
     // (например, реконнект WS) — 4-секундный поллинг чата всё равно подхватит
     // системное сообщение персонала и перезапросит состояние заказа.
-    if (newOnes.any((m) => SenderRole.isStaff(m.senderRole))) {
+    if (newStaffCount > 0) {
       AppLogger.d(_tag,
           'staff message triggered order reload orderId=${_order.id}');
       _reloadOrderState();
@@ -640,14 +635,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _send(String text) async {
-    if (text.trim().isEmpty) return;
-    _messageCtrl.clear();
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
     setState(() => _sending = true);
     final result = await _graphqlClient.mutate(MutationOptions(
-      document: gql(GQLMutations.sendMessage(_order.id, text.trim())),
+      document: gql(GQLMutations.sendMessage(_order.id, trimmed)),
     ));
     if (!mounted) return;
     setState(() => _sending = false);
-    if (!result.hasException) _fetchMessages(scroll: true);
+    if (result.hasException) {
+      _handleSendMessageError(result.exception);
+      return;
+    }
+    _messageCtrl.clear();
+    _fetchMessages(scroll: true);
+  }
+
+  // "unauthorized" отдельно не обрабатываем — AuthState._handleUnauthenticated()
+  // уже форсирует logout на уровне общего GraphQLClient при протухшем токене.
+  // Текст остаётся в поле ввода (не очищаем его до успешной отправки) —
+  // автоповтор не делаем (chat.txt, «Ограничения и права доступа»).
+  void _handleSendMessageError(OperationException? exception) {
+    final message = exception?.graphqlErrors.firstOrNull?.message;
+    AppLogger.w(_tag, 'sendMessage failed orderId=${_order.id}: $message', exception);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message ?? 'Не удалось отправить сообщение')),
+    );
   }
 }

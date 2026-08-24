@@ -15,6 +15,28 @@ void main() {
       expect(payload!.orderId, '123');
       expect(payload.loungeId, '42');
       expect(payload.status, 'in_progress');
+      expect(payload.isChatMessage, isFalse);
+    });
+
+    test('parses a valid new_message payload without a text field', () {
+      final payload = OrderPushPayload.tryParse({
+        'eventType': 'new_message',
+        'orderId': '123',
+        'loungeId': '42',
+        'status': '',
+      });
+
+      expect(payload, isNotNull);
+      expect(payload!.orderId, '123');
+      expect(payload.isChatMessage, isTrue);
+    });
+
+    test('returns null when orderId is missing for new_message', () {
+      final payload = OrderPushPayload.tryParse({
+        'eventType': 'new_message',
+      });
+
+      expect(payload, isNull);
     });
 
     test('returns null when eventType is missing', () {
@@ -61,6 +83,7 @@ void main() {
       expect(payload!.orderId, '123');
       expect(payload.loungeId, isNull);
       expect(payload.status, isNull);
+      expect(payload.isChatMessage, isFalse);
     });
   });
 }
