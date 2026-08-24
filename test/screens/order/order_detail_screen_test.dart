@@ -57,6 +57,39 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 500));
   }
 
+  // Тот же сценарий открытия экрана, что и pumpOrderScreen выше, но с
+  // MockGraphQLClient вместо реального клиента — нужен там, где тест сам
+  // управляет ответами query()/subscribe() (мок GraphQL-сети, тот же
+  // паттерн, что и в test/screens/table/menu_item_picker_test.dart).
+  Future<void> pumpWithClient(
+      WidgetTester tester, MockGraphQLClient client, Order order) async {
+    await tester.pumpWidget(
+      GraphQLProvider(
+        client: ValueNotifier(client),
+        child: MultiProvider(
+          providers: [
+            ChangeNotifierProvider<UnreadState>(create: (_) => UnreadState()),
+            ChangeNotifierProvider<AuthState>(create: (_) => AuthState()),
+          ],
+          child: MaterialApp(
+            home: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  settings: RouteSettings(arguments: {'order': order}),
+                  builder: (_) => const OrderDetailScreen(),
+                )),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+  }
+
   testWidgets('shows menu entry points and items for an editable order', (tester) async {
     const order = Order(
       id: '1',
@@ -158,35 +191,7 @@ void main() {
     // добавляться в чат. Единственный способ это реально проверить —
     // подставить MockGraphQLClient (тот же паттерн, что и в
     // test/screens/table/menu_item_picker_test.dart) и самим протолкнуть
-    // событие в поток подписки.
-    Future<void> pumpWithClient(
-        WidgetTester tester, MockGraphQLClient client, Order order) async {
-      await tester.pumpWidget(
-        GraphQLProvider(
-          client: ValueNotifier(client),
-          child: MultiProvider(
-            providers: [
-              ChangeNotifierProvider<UnreadState>(create: (_) => UnreadState()),
-              ChangeNotifierProvider<AuthState>(create: (_) => AuthState()),
-            ],
-            child: MaterialApp(
-              home: Builder(
-                builder: (context) => ElevatedButton(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                    settings: RouteSettings(arguments: {'order': order}),
-                    builder: (_) => const OrderDetailScreen(),
-                  )),
-                  child: const Text('open'),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    }
+    // событие в поток подписки — см. общий pumpWithClient(...) выше.
 
     testWidgets(
         'a staff message on the order subscription triggers an orders refetch',
@@ -359,35 +364,6 @@ void main() {
   });
 
   group('sendMessage error handling', () {
-    Future<void> pumpWithClient(
-        WidgetTester tester, MockGraphQLClient client, Order order) async {
-      await tester.pumpWidget(
-        GraphQLProvider(
-          client: ValueNotifier(client),
-          child: MultiProvider(
-            providers: [
-              ChangeNotifierProvider<UnreadState>(create: (_) => UnreadState()),
-              ChangeNotifierProvider<AuthState>(create: (_) => AuthState()),
-            ],
-            child: MaterialApp(
-              home: Builder(
-                builder: (context) => ElevatedButton(
-                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-                    settings: RouteSettings(arguments: {'order': order}),
-                    builder: (_) => const OrderDetailScreen(),
-                  )),
-                  child: const Text('open'),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    }
-
     testWidgets(
         'shows a SnackBar and keeps the draft text when sendMessage fails',
         (tester) async {
