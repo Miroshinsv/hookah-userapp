@@ -635,14 +635,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _send(String text) async {
-    if (text.trim().isEmpty) return;
-    _messageCtrl.clear();
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
     setState(() => _sending = true);
     final result = await _graphqlClient.mutate(MutationOptions(
-      document: gql(GQLMutations.sendMessage(_order.id, text.trim())),
+      document: gql(GQLMutations.sendMessage(_order.id, trimmed)),
     ));
     if (!mounted) return;
     setState(() => _sending = false);
-    if (!result.hasException) _fetchMessages(scroll: true);
+    if (result.hasException) {
+      _handleSendMessageError(result.exception);
+      return;
+    }
+    _messageCtrl.clear();
+    _fetchMessages(scroll: true);
+  }
+
+  // "unauthorized" отдельно не обрабатываем — AuthState._handleUnauthenticated()
+  // уже форсирует logout на уровне общего GraphQLClient при протухшем токене.
+  // Текст остаётся в поле ввода (не очищаем его до успешной отправки) —
+  // автоповтор не делаем (chat.txt, «Ограничения и права доступа»).
+  void _handleSendMessageError(OperationException? exception) {
+    final message = exception?.graphqlErrors.firstOrNull?.message;
+    AppLogger.w(_tag, 'sendMessage failed orderId=${_order.id}: $message', exception);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message ?? 'Не удалось отправить сообщение')),
+    );
   }
 }
