@@ -339,7 +339,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _loading ? null : () => _addMenuItem(lounge),
                   icon: const Icon(Icons.add),
-                  label: const Text('+ Меню'),
+                  label: const Text('меню'),
                 ),
               ),
               if (_error != null) ...[

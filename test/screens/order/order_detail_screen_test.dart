@@ -12,10 +12,6 @@ import 'package:user_app/screens/order/order_detail_screen.dart';
 
 class MockGraphQLClient extends Mock implements GraphQLClient {}
 
-// Regression-style tests (no network mocking, same pattern as
-// test/screens/table/session_items_screen_test.dart): the "+ Меню" / "Меню"
-// entry points must only appear while Order.isEditable is true (order.txt
-// раздел 4 — backend отклоняет addOrderItems после completed/canceled*).
 void main() {
   setUpAll(() {
     registerFallbackValue(QueryOptions(document: gql('query { noop }')));
@@ -90,7 +86,8 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 500));
   }
 
-  testWidgets('shows menu entry points and items for an editable order', (tester) async {
+  testWidgets('shows menu entry points and items for an editable order',
+      (tester) async {
     const order = Order(
       id: '1',
       loungeId: '2',
@@ -111,7 +108,7 @@ void main() {
     await pumpOrderScreen(tester, order);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('+ Меню'), findsOneWidget);
+    expect(find.text('меню'), findsOneWidget);
     expect(find.byIcon(Icons.restaurant_menu), findsOneWidget);
     expect(find.textContaining('Кола'), findsOneWidget);
     expect(find.textContaining('Итого: 300'), findsOneWidget);
@@ -123,7 +120,7 @@ void main() {
     await pumpOrderScreen(tester, order);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('+ Меню'), findsNothing);
+    expect(find.text('меню'), findsNothing);
     expect(find.byIcon(Icons.restaurant_menu), findsNothing);
   });
 
@@ -173,14 +170,14 @@ void main() {
   });
 
   testWidgets(
-      'does not show an items header but still shows "+ Меню" when the order has no items yet',
+      'does not show an items header but still shows "меню" when the order has no items yet',
       (tester) async {
     const order = Order(id: '1', loungeId: '2', status: 'new');
 
     await pumpOrderScreen(tester, order);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('+ Меню'), findsOneWidget);
+    expect(find.text('меню'), findsOneWidget);
     expect(find.byIcon(Icons.restaurant_menu), findsOneWidget);
     expect(find.text('Позиции заказа'), findsNothing);
   });

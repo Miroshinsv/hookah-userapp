@@ -8,7 +8,7 @@ Created: 2026-08-18
 промт на добавление позиций из меню.
 
 Добавить позицию в меню можно
-1) На экране заказа. над кнопкой "заказать" добавить кнопку "+ меню), с раскрывающимся списком меню
+1) На экране заказа. над кнопкой "заказать" добавить кнопку "меню), с раскрывающимся списком меню
 2) На экране заказа (где чат с кальянной). Добавить кнопку "меню" с раскрывающимся списком меню
 
 ## Settings
@@ -31,7 +31,7 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
 В проекте нет отдельного экрана «заказ» с кнопкой «заказать» и отдельного экрана «чат с кальянной» — оба требования пользователя описывают **один и тот же** `lib/screens/order/order_detail_screen.dart` (уже совмещает блок информации о заказе сверху и чат с заведением снизу; единственная кнопка с похожим смыслом — «Оформить заказ» — находится на экране *создания* заказа `new_order_screen.dart`, где `orderId` ещё не существует, поэтому `addOrderItems` там технически невозможен).
 
 Поэтому в плане обе точки входа реализуются на `order_detail_screen.dart`:
-1. Кнопка **«+ Меню»** — в блоке информации о заказе (`_buildOrderInfo()`), рядом с текущими позициями/итогом.
+1. Кнопка **«меню»** — в блоке информации о заказе (`_buildOrderInfo()`), рядом с текущими позициями/итогом.
 2. Кнопка **«Меню»** — в панели ввода чата (`_buildInput()`), рядом с полем сообщения.
 
 Обе кнопки открывают один и тот же список меню и вызывают один и тот же обработчик. Если это расходится с ожиданиями — скорректировать на этапе `/aif-improve` до начала `/aif-implement`.
@@ -79,7 +79,7 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
   - Логирование: не требуется — чистый рендеринг уже загруженного состояния `_order`, без сетевых вызовов.
   - Файлы: `lib/screens/order/order_detail_screen.dart`
 
-- [x] Task 5: Общий обработчик добавления позиции + кнопка «+ Меню» (depends on: 1, 3, 4)
+- [x] Task 5: Общий обработчик добавления позиции + кнопка «меню» (depends on: 1, 3, 4)
   - Добавить `bool _addingMenuItem = false;` и `static const _tag = 'OrderDetail';` (если тега ещё нет в классе).
   - Метод `Future<void> _addMenuItem()`, по образцу `_addItem()` из `session_items_screen.dart`:
     - `showMenuItemPicker(context, loungeId: _order.loungeId)` → если `null`/юзер отменил — выйти.
@@ -88,7 +88,7 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
     - При успехе — распарсить `result.data?['addOrderItems']`, обновить `_order` через `_order.copyWith(status:, menuItems:, hookahItems:, subtotal:, finalTotal:)` (см. Task 1), `AppLogger.i(_tag, 'addOrderItems ok orderId=${_order.id} items=${...length} finalTotal=${_order.finalTotal}')`.
     - При ошибке — делегировать в единый обработчик ошибок из Task 7.
     - В течение запроса — `setState(() => _addingMenuItem = true/false)`, отключать кнопки на время запроса (как `_adding` в `session_items_screen.dart`).
-  - Кнопка «+ Меню» — в `_buildOrderInfo()`, сразу под блоком позиций/итога из Task 4; видима только если `_order.isEditable`; `onPressed: _addingMenuItem ? null : _addMenuItem`.
+  - Кнопка «меню» — в `_buildOrderInfo()`, сразу под блоком позиций/итога из Task 4; видима только если `_order.isEditable`; `onPressed: _addingMenuItem ? null : _addMenuItem`.
   - Логирование: DEBUG перед вызовом мутации (параметры), INFO при успехе (обновлённое состояние заказа), WARN при ошибке (см. Task 7) — формат `[OrderDetail.method] message {data}` по конвенции `AppLogger`.
   - Файлы: `lib/screens/order/order_detail_screen.dart`
 
@@ -127,7 +127,7 @@ Source: `/home/msv/GolandProjects/hookah_backend/order.txt` (внешний ТЗ
 
 - [x] Task 10: Widget-тесты `order_detail_screen.dart` — новый файл `test/screens/order/order_detail_screen_test.dart` (depends on: 4, 5, 6, 7)
   - По образцу `test/screens/table/session_items_screen_test.dart` (лёгкий regression-стиль, `GraphQLClient` на невалидный URL, без сетевого мокинга): экран строится без исключений на первом кадре для заказа со статусом `in_progress`.
-  - Кнопка «+ Меню» и кнопка «Меню» в чате видны для `_order.isEditable == true` (`new`/`in_progress`/`calculation`) и отсутствуют для `completed`/`canceled*`.
+  - Кнопка «меню» и кнопка «Меню» в чате видны для `_order.isEditable == true` (`new`/`in_progress`/`calculation`) и отсутствуют для `completed`/`canceled*`.
   - Блок позиций/итога рендерится при непустых `menuItems`, и не рендерится (нет пустого заголовка) при пустых.
   - Логирование: не применимо — widget-тест.
   - Файлы: `test/screens/order/order_detail_screen_test.dart`

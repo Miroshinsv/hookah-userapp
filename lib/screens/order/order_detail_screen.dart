@@ -262,7 +262,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     return [
       // Список позиций рендерится только если он не пуст — не показываем
-      // пустой заголовок. Кнопка "+ Меню" ниже НЕ зависит от hasItems: она
+      // пустой заголовок. Кнопка "меню" ниже НЕ зависит от hasItems: она
       // должна быть доступна и для только что созданного заказа без единой
       // позиции — это единственный способ добавить самую первую.
       if (hasItems) ...[
@@ -292,7 +292,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ? const SizedBox(
                     width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.add),
-            label: const Text('+ Меню'),
+            label: const Text('меню'),
           ),
         ),
       ],
@@ -338,7 +338,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  // Общий обработчик для обеих точек входа ("+ Меню" в блоке заказа и
+  // Общий обработчик для обеих точек входа ("меню" в блоке заказа и
   // "Меню" в панели чата) — дозаказ позиций через addOrderItems (order.txt
   // раздел 3). Позиции только добавляются, удаление/отмена пользователю
   // недоступны в принципе (см. order.txt раздел 4) — соответствующих
@@ -424,10 +424,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _reloadOrderState();
   }
 
-  // Перезагружает состояние заказа с сервера после ошибки addOrderItems —
-  // экран не должен оставаться в устаревшем состоянии (order.txt раздел 5).
-  // Переиспользует уже протестированную чистую функцию findOrderById из
-  // push_navigation.dart вместо дублирования поиска по id.
   Future<void> _reloadOrderState() async {
     final result = await _graphqlClient.query(QueryOptions(
       document: gql(GQLQueries.orders),
