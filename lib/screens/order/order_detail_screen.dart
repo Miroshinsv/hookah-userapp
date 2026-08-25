@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/chat/sender_role.dart';
 import '../../core/chat/unread_state.dart';
 import '../../core/graphql/mutations.dart';
 import '../../core/graphql/queries.dart';
@@ -95,22 +96,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   void _subscribeMessages() {
+    // Реальная подписка бэкенда глобальная (без аргумента orderId) — сервер
+    // не заполняет id/createdAt в её payload, поэтому она используется только
+    // как триггер рефетча messages(), а не как источник готовой модели
+    // ChatMessage (см. Backend Contract Reference в плане фичи).
     final stream = _graphqlClient.subscribe(SubscriptionOptions(
-      document: gql(GQLSubscriptions.messageCreatedForOrder(_order.id)),
+      document: gql(GQLSubscriptions.newMessage),
     ));
     _msgSub = stream.listen((result) {
       if (!mounted || result.data == null) return;
-      final raw = result.data!['messageCreated'] as Map<String, dynamic>?;
+      final raw = result.data!['newMessage'] as Map<String, dynamic>?;
       if (raw == null) return;
-      final msg = ChatMessage.fromJson(raw);
-      final isNew = !_messages.any((m) => m.id == msg.id);
-      if (!isNew) return;
-      final isStaff = msg.senderRole != 'user';
-      setState(() {
-        _messages = [..._messages, msg];
-        if (isStaff && !_isAtBottom) _newInSession++;
-      });
-      if (!isStaff || _isAtBottom) _scrollToBottom();
+      if ((raw['orderId'] as String?) != _order.id) return;
+      AppLogger.d(_tag,
+          'newMessage event for own order, refetching orderId=${_order.id}');
+      _fetchMessages();
     });
   }
 
@@ -125,9 +125,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final fetched = raw
         .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
         .toList();
-    final hasNew = fetched.length > _messages.length;
-    setState(() => _messages = fetched);
+    final oldIds = _messages.map((m) => m.id).toSet();
+    final newOnes = fetched.where((m) => !oldIds.contains(m.id)).toList();
+    final hasNew = newOnes.isNotEmpty;
+    final newStaffCount =
+        newOnes.where((m) => SenderRole.isStaff(m.senderRole)).length;
+    setState(() {
+      _messages = fetched;
+      if (newStaffCount > 0 && !_isAtBottom) _newInSession += newStaffCount;
+    });
     if (scroll || (hasNew && _isAtBottom)) _scrollToBottom();
+    // Подстраховка на случай, если подписка временно не доставила событие
+    // (например, реконнект WS) — 4-секундный поллинг чата всё равно подхватит
+    // системное сообщение персонала и перезапросит состояние заказа.
+    if (newStaffCount > 0) {
+      AppLogger.d(_tag,
+          'staff message triggered order reload orderId=${_order.id}');
+      _reloadOrderState();
+    }
   }
 
   void _scrollToBottom() {
@@ -247,7 +262,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
     return [
       // Список позиций рендерится только если он не пуст — не показываем
-      // пустой заголовок. Кнопка "+ Меню" ниже НЕ зависит от hasItems: она
+      // пустой заголовок. Кнопка "меню" ниже НЕ зависит от hasItems: она
       // должна быть доступна и для только что созданного заказа без единой
       // позиции — это единственный способ добавить самую первую.
       if (hasItems) ...[
@@ -256,36 +271,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
         const SizedBox(height: 6),
         for (final item in _order.menuItems)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text('${item.name} × ${item.quantity}',
-                      style: const TextStyle(color: Colors.grey)),
-                ),
-                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
-                    style: const TextStyle(color: Colors.grey)),
-              ],
-            ),
-          ),
+          _buildOrderItemRow(
+              '${item.name} × ${item.quantity}', item.unitPrice, item.status),
         for (final item in _order.hookahItems)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                      '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
-                      style: const TextStyle(color: Colors.grey)),
-                ),
-                Text('${item.unitPrice.toStringAsFixed(0)} ₽',
-                    style: const TextStyle(color: Colors.grey)),
-              ],
-            ),
-          ),
+          _buildOrderItemRow(
+              '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
+              item.unitPrice,
+              item.status),
         const SizedBox(height: 6),
         Text('Итого: ${_order.finalTotal?.toStringAsFixed(0) ?? '—'} ₽',
             style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -300,14 +292,53 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ? const SizedBox(
                     width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.add),
-            label: const Text('+ Меню'),
+            label: const Text('меню'),
           ),
         ),
       ],
     ];
   }
 
-  // Общий обработчик для обеих точек входа ("+ Меню" в блоке заказа и
+  // Отменённая персоналом позиция (status: "canceled") остаётся в списке, но
+  // помечается зачёркиванием и меткой "Отменено" — гость видит, что именно
+  // отменили, даже не читая системное сообщение в чате (order.txt раздел
+  // 1.b). Безвозвратно удалённые позиции (только admin) сюда не попадают —
+  // их просто больше нет в menuItems/hookahItems после перезагрузки заказа.
+  Widget _buildOrderItemRow(String label, double unitPrice, String status) {
+    final canceled = status == 'canceled';
+    final style = TextStyle(
+      color: Colors.grey,
+      decoration: canceled ? TextDecoration.lineThrough : null,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: Text(label, style: style)),
+                if (canceled) ...[
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Отменено',
+                    style: TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Text('${unitPrice.toStringAsFixed(0)} ₽', style: style),
+        ],
+      ),
+    );
+  }
+
+  // Общий обработчик для обеих точек входа ("меню" в блоке заказа и
   // "Меню" в панели чата) — дозаказ позиций через addOrderItems (order.txt
   // раздел 3). Позиции только добавляются, удаление/отмена пользователю
   // недоступны в принципе (см. order.txt раздел 4) — соответствующих
@@ -393,10 +424,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _reloadOrderState();
   }
 
-  // Перезагружает состояние заказа с сервера после ошибки addOrderItems —
-  // экран не должен оставаться в устаревшем состоянии (order.txt раздел 5).
-  // Переиспользует уже протестированную чистую функцию findOrderById из
-  // push_navigation.dart вместо дублирования поиска по id.
   Future<void> _reloadOrderState() async {
     final result = await _graphqlClient.query(QueryOptions(
       document: gql(GQLQueries.orders),
@@ -483,7 +510,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       itemCount: _messages.length,
       itemBuilder: (ctx, i) {
         final msg  = _messages[i];
-        final isMe = msg.senderRole == 'user' ||
+        final isMe = !SenderRole.isStaff(msg.senderRole) ||
             (phone.isNotEmpty && msg.senderId == phone);
 
         const myBg    = Color(0xFF3D2800);
@@ -604,14 +631,31 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _send(String text) async {
-    if (text.trim().isEmpty) return;
-    _messageCtrl.clear();
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
     setState(() => _sending = true);
     final result = await _graphqlClient.mutate(MutationOptions(
-      document: gql(GQLMutations.sendMessage(_order.id, text.trim())),
+      document: gql(GQLMutations.sendMessage(_order.id, trimmed)),
     ));
     if (!mounted) return;
     setState(() => _sending = false);
-    if (!result.hasException) _fetchMessages(scroll: true);
+    if (result.hasException) {
+      _handleSendMessageError(result.exception);
+      return;
+    }
+    _messageCtrl.clear();
+    _fetchMessages(scroll: true);
+  }
+
+  // "unauthorized" отдельно не обрабатываем — AuthState._handleUnauthenticated()
+  // уже форсирует logout на уровне общего GraphQLClient при протухшем токене.
+  // Текст остаётся в поле ввода (не очищаем его до успешной отправки) —
+  // автоповтор не делаем (chat.txt, «Ограничения и права доступа»).
+  void _handleSendMessageError(OperationException? exception) {
+    final message = exception?.graphqlErrors.firstOrNull?.message;
+    AppLogger.w(_tag, 'sendMessage failed orderId=${_order.id}: $message', exception);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message ?? 'Не удалось отправить сообщение')),
+    );
   }
 }

@@ -80,10 +80,18 @@ class PushService {
       AppLogger.w(_tag, 'foreground push ignored — unparseable data ${message.data}');
       return;
     }
-    AppLogger.d(_tag, 'foreground push parsed orderId=${payload.orderId} status=${payload.status}');
+    AppLogger.d(_tag,
+        'foreground push parsed orderId=${payload.orderId} status=${payload.status} isChatMessage=${payload.isChatMessage}');
     // FCM не показывает системное уведомление сам, пока приложение активно —
     // показываем его локально готовым title/body из payload (сервер уже
     // прислал локализованный текст, на клиенте не переформулируем).
+    if (payload.isChatMessage) {
+      NotificationService.showChatMessage(
+        orderId: payload.orderId,
+        text: message.notification?.body ?? 'Новое сообщение',
+      );
+      return;
+    }
     NotificationService.showOrderStatusPush(
       orderId: payload.orderId,
       title: message.notification?.title ?? 'Обновление заказа',

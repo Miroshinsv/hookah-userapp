@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/chat/sender_role.dart';
 import '../../core/chat/unread_state.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/graphql/subscriptions.dart';
 import '../../core/models/order.dart';
-import '../../core/notifications/notification_service.dart';
+import '../../core/utils/logger.dart';
 import '../../widgets/status_badge.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -18,6 +19,8 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class OrdersScreenState extends State<OrdersScreen> {
+  static const _tag = 'OrdersScreen';
+
   List<Order> _orders = [];
   bool _loading = false;
   String? _error;
@@ -109,26 +112,26 @@ class OrdersScreenState extends State<OrdersScreen> {
       _fetch();
     });
 
-    // Глобальная подписка на новые сообщения от сотрудников
+    // Глобальная подписка на новые сообщения от сотрудников (только бейджик
+    // непрочитанных здесь — видимое уведомление теперь показывает настоящий
+    // FCM push через PushService/NotificationService.showChatMessage, см.
+    // тот же принцип, что и для orderStatusChanged выше: не дублируем push
+    // локальной нотификацией по WS-событию).
     _msgSub = _client.subscribe(SubscriptionOptions(
-      document: gql(GQLSubscriptions.messageCreated),
+      document: gql(GQLSubscriptions.newMessage),
     )).listen((result) {
       if (!mounted || result.data == null) return;
-      final msg = result.data!['messageCreated'] as Map<String, dynamic>?;
+      final msg = result.data!['newMessage'] as Map<String, dynamic>?;
       if (msg == null) return;
 
       final senderRole = msg['senderRole'] as String? ?? '';
       final orderId    = msg['orderId'] as String? ?? '';
-      final text       = msg['text'] as String? ?? '';
 
-      // Уведомления и бейджик только для сообщений от сотрудников
-      if (senderRole == 'staff' && orderId.isNotEmpty) {
-        final unread = context.read<UnreadState>();
-        unread.onNewStaffMessage(orderId);
-        // Показать пуш только если пользователь не в этом чате
-        if (unread.currentOrderId != orderId) {
-          NotificationService.showChatMessage(orderId: orderId, text: text);
-        }
+      // Бейджик только для сообщений от сотрудников
+      // (staff/admin/owner/deputy — все роли персонала, см. order.txt).
+      if (SenderRole.isStaff(senderRole) && orderId.isNotEmpty) {
+        AppLogger.d(_tag, 'newMessage badge update orderId=$orderId');
+        context.read<UnreadState>().onNewStaffMessage(orderId);
       }
     });
   }

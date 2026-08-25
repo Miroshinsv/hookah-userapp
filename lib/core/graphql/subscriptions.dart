@@ -10,29 +10,18 @@ class GQLSubscriptions {
     }
   ''';
 
-  // Все новые сообщения для заказов текущего пользователя (orderId в ответе)
-  static const messageCreated = r'''
+  // Реальное поле схемы бэкенда — глобальное, без аргумента orderId
+  // (фильтрация по получателю — на уровне WS-соединения на сервере, не
+  // GraphQL-аргументом; orderId приходит в самом payload). Только триггер:
+  // сервер не заполняет id/createdAt в этом событии — настоящие значения
+  // берутся только из messages()/sendMessage().
+  static const newMessage = r'''
     subscription {
-      messageCreated {
-        id
+      newMessage {
         orderId
         senderId
         senderRole
         text
-        createdAt
-      }
-    }
-  ''';
-
-  // Сообщения для конкретного заказа (без orderId в ответе)
-  static String messageCreatedForOrder(String orderId) => '''
-    subscription {
-      messageCreated(orderId: ${jsonEncode(orderId)}) {
-        id
-        senderId
-        senderRole
-        text
-        createdAt
       }
     }
   ''';

@@ -25,7 +25,7 @@ flutter run
 | Guide | Description |
 |-------|-------------|
 | [Guest Table Sessions, Tobacco Catalog & Push](docs/guest-table-sessions.md) | Joining a table session, adding items, tobacco catalog, FCM push registration & order-status alerts |
-| [Order Menu Items](docs/order-menu-items.md) | Adding menu items to an already-open order, item/total display, error handling |
+| [Order Menu Items](docs/order-menu-items.md) | Adding menu items to an already-open order, item/total display, error handling, and reacting to staff-side confirm/cancel/delete actions via chat |
 
 ## Getting Started (Flutter)
 
