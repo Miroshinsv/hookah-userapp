@@ -316,6 +316,17 @@ class _MapScreenState extends State<MapScreen> {
     final valid =
         lounges.where((l) => l.latitude != 0 || l.longitude != 0).toList();
 
+    // [FIX] Прозрачность маркера отражает "подключённость" лауджа
+    // (ownerUserId задан), а не его открыт/закрыт статус — это было
+    // случайно потеряно при переходе на loungesPage (viewport-фильтрация),
+    // когда лёгкий loungesPage-запрос перестал запрашивать ownerUserId.
+    final connectedCount = valid.where((l) => l.isConnected).length;
+    AppLogger.d(
+      _kTag,
+      'markers connected=$connectedCount notConnected=${valid.length - connectedCount} '
+      'total=${valid.length}',
+    );
+
     if (valid.length <= _kClusterThreshold) {
       return valid.map(_buildLoungePlacemark).toList();
     }
@@ -357,9 +368,12 @@ class _MapScreenState extends State<MapScreen> {
     return result;
   }
 
+  // [FIX] opacity зависит от "подключённости" лауджа (ownerUserId задан),
+  // а не от status — восстановлено историческое поведение (git 920f5e8),
+  // случайно заменённое на status=='closed' в feature-map-viewport-lounges.
   PlacemarkMapObject _buildLoungePlacemark(LoungeMapItem l) {
     return PlacemarkMapObject(
-      opacity: l.status == 'closed' ? 0.6 : 1.0,
+      opacity: l.isConnected ? 1.0 : 0.6,
       mapId: MapObjectId('lounge_${l.id}'),
       point: Point(latitude: l.latitude, longitude: l.longitude),
       icon: PlacemarkIcon.single(

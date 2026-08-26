@@ -55,6 +55,7 @@ class LoungeMapItem {
   final bool is24Hours;
   final String status;
   final double? distanceKm;
+  final String? ownerUserId;
 
   const LoungeMapItem({
     required this.id,
@@ -66,7 +67,14 @@ class LoungeMapItem {
     this.is24Hours = false,
     required this.status,
     this.distanceKm,
+    this.ownerUserId,
   });
+
+  // Управляет непрозрачностью маркера на карте (map_screen.dart) — "открыт/
+  // закрыт" (status) и "подключён" (ownerUserId задан) две независимые
+  // характеристики, opacity зависит только от второй, см. patch
+  // 2026-08-26-14.02.md.
+  bool get isConnected => (ownerUserId ?? '').isNotEmpty;
 
   factory LoungeMapItem.fromJson(Map<String, dynamic> json) => LoungeMapItem(
         id: json['id'] as String? ?? '',
@@ -78,6 +86,7 @@ class LoungeMapItem {
         is24Hours: json['is24Hours'] as bool? ?? false,
         status: json['status'] as String? ?? 'closed',
         distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+        ownerUserId: json['ownerUserId'] as String?,
       );
 }
 

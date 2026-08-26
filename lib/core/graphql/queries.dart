@@ -75,6 +75,7 @@ class GQLQueries {
           is24Hours
           status
           distanceKm
+          ownerUserId
         }
         total
         page
