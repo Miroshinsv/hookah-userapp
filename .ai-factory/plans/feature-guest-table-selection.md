@@ -139,13 +139,13 @@ Source spec: `/home/msv/GolandProjects/hookah_backend/sitplace.txt` — full Gra
 
 ### Phase 4: Tests
 
-- [ ] **Task 11 — Tests: `FloorPlan` parsing + occupancy classification**
+- [x] **Task 11 — Tests: `FloorPlan` parsing + occupancy classification**
   File: `test/floor_plan_test.dart` (new)
   Test `FloorPlan.fromJson` against a payload shaped like the spec's example blob (walls/windows/doors/zones all populated), and against edge cases: `walls` field as `""`/`"[]"` (must produce an empty `FloorPlan`, not throw), a zone with a malformed `color` hex string (must not throw — fall back to a default color and log WARN).
   Test `classifyTableOccupancy`: no session → `free`; session with empty `bookedFor` → `occupiedNow`; session with `bookedFor` exactly `openedAt + 1800` → `occupiedNow` (boundary is inclusive per spec: "не более чем на 30 минут" = `<=`); session with `bookedFor` at `openedAt + 1801` → `futureBooking`; malformed numeric strings → `occupiedNow` (fail-safe) + verify a WARN log is emitted (or at minimum that it doesn't throw, per this project's existing test style — check how prior tests in this repo assert on `AppLogger` calls, if at all, and match that convention rather than inventing a new one).
   Dependency: blocked by Tasks 2, 3.
 
-- [ ] **Task 12 — Tests: query/mutation builders + `Order` model fields**
+- [x] **Task 12 — Tests: query/mutation builders + `Order` model fields**
   File: `test/table_selection_test.dart` (new)
   Test `GQLQueries.isTablesEnabled`/`GQLQueries.floorPlan` embed `loungeId` correctly (including a value with a quote/special character, matching the existing `jsonEncode`-escaping test style from `test/lounges_page_test.dart`). Test the updated `GQLQueries.activeSessions` includes `bookedFor` in its selection set. Test `GQLMutations.openTableSession` embeds `tableId`/`loungeId`/`orderId`/`guestCount` correctly and **always** includes `failIfOccupied: true` verbatim in the built string (regression guard — this must never become a caller-controlled parameter). Test `Order.fromJson`/`copyWith` correctly round-trip `tableId`/`tableLabel`/`tableSeatConflict`, including the `tableSeatConflict: true, tableId: null` conflict-response shape from the spec.
   Dependency: blocked by Tasks 1, 4, 5.
