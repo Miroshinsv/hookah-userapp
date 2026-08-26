@@ -87,14 +87,14 @@ Source spec: `/home/msv/GolandProjects/hookah_backend/sitplace.txt` — full Gra
 
 ### Phase 2: Floor plan canvas rendering
 
-- [ ] **Task 6 — `FloorPlanPainter` (CustomPainter)**
+- [x] **Task 6 — `FloorPlanPainter` (CustomPainter)**
   File: `lib/widgets/floor_plan/floor_plan_painter.dart` (new)
   A `CustomPainter` taking a `FloorPlan` and painting, in order: `zones` (filled rects with `zone.color` at reduced opacity + a small text label via `TextPainter`), `walls` (each `FloorPlanWall.points` drawn as a continuous `Path` with a solid stroke), `windows`/`doors` (drawn as line segments between their two points, doors in a visually distinct style — dash or different color; ignore the `swing` field per spec, it's not critical for table selection). Canvas coordinate space matches the raw `x`/`y` units from the backend (same units as `TableItem.x/y`) — do not rescale internally; sizing/scaling is the caller's job via `InteractiveViewer`/a fixed-size `SizedBox`.
   `shouldRepaint` compares the `FloorPlan` reference (or an `updatedAt` string comparison) to avoid unnecessary repaints.
   Logging: `AppLogger.d` once per `paint()` call is too noisy — skip per-frame logging; log only in the widget that owns this painter (Task 7) when the underlying `FloorPlan` data changes.
   Dependency: blocked by Task 2.
 
-- [ ] **Task 7 — `TableSelectionScreen` skeleton: load state + pan/zoom canvas + table markers**
+- [x] **Task 7 — `TableSelectionScreen` skeleton: load state + pan/zoom canvas + table markers**
   File: `lib/screens/table/table_selection_screen.dart` (new)
   A full-screen `StatefulWidget` taking `loungeId` and `orderId` as constructor args (pushed via `Navigator.push(context, MaterialPageRoute(builder: (_) => TableSelectionScreen(loungeId: ..., orderId: ...)))` — not registered in `main.dart`, matching `my_table_screen.dart`'s route style but as a direct push since this screen is always entered with required context, no named-route args-casting needed).
   On `initState`/first load: run `GQLQueries.floorPlan`, `GQLQueries.tables`, `GQLQueries.activeSessions` (via `Future.wait` for the three queries in parallel, using `GraphQLProvider.of(context).value` same as `order_detail_screen.dart`'s `_graphqlClient` pattern), parse into `FloorPlan`/`List<TableItem>`/`List<TableSession>`, build a `Map<String, TableSession>` keyed by `tableId` (mirroring `my_table_screen.dart`'s `_sessionsByTableId`).
@@ -103,7 +103,7 @@ Source spec: `/home/msv/GolandProjects/hookah_backend/sitplace.txt` — full Gra
   Logging: verbose — log on load start/success/failure (`loungeId=`, counts of walls/tables/sessions), on each table tap with its classified status.
   Dependency: blocked by Tasks 1, 2, 3, 6.
 
-- [ ] **Task 8 — Guest-count picker + table tap → `openTableSession` flow**
+- [x] **Task 8 — Guest-count picker + table tap → `openTableSession` flow**
   File: `lib/screens/table/table_selection_screen.dart`
   On tapping a **free** table marker: show a small guest-count picker (a simple `AlertDialog`/`showDialog` with a stepper or dropdown from 1 to `table.seats`, default 1 — reuse/adapt the quantity-dialog pattern from `menu_item_picker.dart`'s `_showQuantityDialog` if suitable, capping the max at `seats` instead of an arbitrary max). After the guest confirms a count:
   1. Refresh `tables`/`activeSessions` one more time (per spec's "refresh right before showing confirmation" guidance) and re-verify the tapped table is still classified `free` — if not, show the conflict message immediately without calling the mutation.
