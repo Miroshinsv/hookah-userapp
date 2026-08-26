@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:user_app/core/graphql/mutations.dart';
 import 'package:user_app/core/graphql/queries.dart';
 import 'package:user_app/core/models/order.dart';
+import 'package:user_app/screens/table/table_selection_screen.dart';
 
 void main() {
   group('GQLQueries.isTablesEnabled', () {
@@ -51,6 +52,56 @@ void main() {
       expect(mutation, contains(r'orderId: "789"'));
       expect(mutation, contains('guestCount: 2'));
       expect(mutation, contains('failIfOccupied: true'));
+    });
+  });
+
+  group('GQLMutations.createOrder — table selection at creation', () {
+    String baseCall({String? tableId, int? guestCount}) => GQLMutations.createOrder(
+          loungeId: '5',
+          flavor: 'Мята',
+          phoneLast4: '1234',
+          phoneMock: '+7 (900) ***-**-34',
+          arrivalAt: '2026-08-25T20:00:00Z',
+          tableId: tableId,
+          guestCount: guestCount,
+        );
+
+    test('embeds tableId/guestCount when a table is provided', () {
+      final mutation = baseCall(tableId: '17', guestCount: 2);
+      expect(mutation, contains(r'tableId: "17"'));
+      expect(mutation, contains('guestCount: 2'));
+    });
+
+    test('omits tableId/guestCount when no table is provided (unchanged legacy shape)', () {
+      final mutation = baseCall();
+      expect(mutation, isNot(contains('tableId:')));
+      expect(mutation, isNot(contains('guestCount:')));
+    });
+
+    test('response selection set includes tableId/tableLabel/tableSeatConflict', () {
+      final mutation = baseCall();
+      expect(mutation, contains('tableId'));
+      expect(mutation, contains('tableLabel'));
+      expect(mutation, contains('tableSeatConflict'));
+    });
+  });
+
+  group('TableSelectionResult', () {
+    test('carries a null sessionId in pre-order mode (no session opened yet)', () {
+      const result = TableSelectionResult(tableId: '17', tableLabel: 'VIP-1', guestCount: 2);
+      expect(result.sessionId, isNull);
+      expect(result.tableId, '17');
+      expect(result.guestCount, 2);
+    });
+
+    test('carries a non-null sessionId for an existing-order selection', () {
+      const result = TableSelectionResult(
+        sessionId: 's1',
+        tableId: '17',
+        tableLabel: 'VIP-1',
+        guestCount: 2,
+      );
+      expect(result.sessionId, 's1');
     });
   });
 

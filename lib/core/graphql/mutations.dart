@@ -41,6 +41,8 @@ class GQLMutations {
     required String phoneLast4,
     required String phoneMock,
     required String arrivalAt,
+    String? tableId,
+    int? guestCount,
   }) => '''
     mutation {
       createOrder(
@@ -50,9 +52,14 @@ class GQLMutations {
         phoneLast4: ${jsonEncode(phoneLast4)}
         phoneMock: ${jsonEncode(phoneMock)}
         arrivalAt: ${jsonEncode(arrivalAt)}
+        ${tableId != null ? 'tableId: ${jsonEncode(tableId)}' : ''}
+        ${tableId != null && guestCount != null ? 'guestCount: $guestCount' : ''}
       ) {
         id
         status
+        tableId
+        tableLabel
+        tableSeatConflict
       }
     }
   ''';

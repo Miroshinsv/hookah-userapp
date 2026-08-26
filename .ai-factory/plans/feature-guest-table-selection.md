@@ -152,6 +152,38 @@ Source spec: `/home/msv/GolandProjects/hookah_backend/sitplace.txt` — full Gra
 
 **Commit checkpoint 4**: `test(table): cover floor-plan parsing, occupancy rules, and table-selection GraphQL builders`
 
+### Phase 5: Table selection at order creation (scope extension, requested mid-implementation)
+
+User feedback during implementation: the "Место" button should also be available on the order-**creation** screen (`new_order_screen.dart`), not only on the already-created-order screen. Originally scoped out (see Context/Findings), now explicitly requested — via `createOrder(tableId, guestCount)`, per sitplace.txt.
+
+Since no order exists yet at this point, `TableSelectionScreen` needs a **pre-order mode**: when pushed without an `orderId`, tapping a free table must NOT call `openTableSession` (that mutation requires an existing `orderId`) — it just returns the chosen `tableId`/`tableLabel`/`guestCount` to the caller, which holds it locally and sends it as part of `createOrder`. The authoritative occupancy check then happens server-side inside `createOrder` itself; on a race, `createOrder` still succeeds but returns `tableId: null, tableSeatConflict: true` (already modeled on `Order`, Task 5) — the guest must be told their table wasn't secured.
+
+- [x] **Task 13 — Add `tableId`/`guestCount` to `createOrder` mutation + request `tableId`/`tableLabel`/`tableSeatConflict` in its response**
+  File: `lib/core/graphql/mutations.dart`
+  Add optional `String? tableId` and `int? guestCount` parameters to `GQLMutations.createOrder(...)`; include `tableId`/`guestCount` in the mutation call only when `tableId != null` (same `${... != null ? '...' : ''}` interpolation style already used for `comment`). Add `tableId tableLabel tableSeatConflict` to the mutation's response selection set (alongside the existing `id status`).
+  Logging: none (pure string builder).
+  Dependency: none.
+
+- [x] **Task 14 — Pre-order mode in `TableSelectionScreen` (nullable `orderId`)**
+  File: `lib/screens/table/table_selection_screen.dart`
+  Change `TableSelectionScreen.orderId` to `String?` (nullable). Add `guestCount` to `TableSelectionResult` and make `sessionId` nullable (null in pre-order mode — no session exists yet). In `_selectTable(...)`: keep the existing refresh-and-reverify-free step in both modes; when `widget.orderId != null`, keep the current `openTableSession` call + error handling unchanged; when `widget.orderId == null`, skip the mutation entirely and `Navigator.pop` directly with `TableSelectionResult(sessionId: null, tableId: table.tableId, tableLabel: table.label ?? table.tableId, guestCount: guestCount)` — the actual reservation attempt happens later, server-side, inside `createOrder`.
+  Logging: `AppLogger.d` distinguishing the pre-order (no-mutation) pop path from the existing-order (`openTableSession`) path.
+  Dependency: blocked by Task 8 (modifies the same flow).
+
+- [x] **Task 15 — Wire "Место" button + selected-table display in `new_order_screen.dart`, pass to `createOrder`, surface conflict**
+  File: `lib/screens/order/new_order_screen.dart`, `lib/screens/order/order_detail_screen.dart`
+  In `new_order_screen.dart`: load `isTablesEnabled(lounge.id)` once (`didChangeDependencies` + `_initialized`-style guard, mirroring Task 9's pattern), store as `_tablesEnabled`. Add local state `_selectedTableId`/`_selectedTableLabel`/`_selectedGuestCount` (all nullable) and a `_selectingTable` busy flag. Add an `OutlinedButton.icon` "Место" (same visual style as the existing "меню" button), shown only when `_tablesEnabled`, that pushes `TableSelectionScreen(loungeId: lounge.id, orderId: null)` and stores the returned result. When a table is selected, show it below the button (label + guest count) with a clear ("×") action, mirroring the cart-item row style. In `_submit(...)`, pass `tableId: _selectedTableId, guestCount: _selectedTableId != null ? _selectedGuestCount : null` into `GQLMutations.createOrder(...)`. `Order.fromJson` already parses `tableId`/`tableLabel`/`tableSeatConflict` from the spread `orderData` (Task 5) — no extra parsing needed. If `orderData['tableSeatConflict'] == true`, pass `'tableSeatConflict': true` in the `Navigator.pushReplacementNamed(context, '/order', arguments: {...})` map (in addition to `order`/`lounge`) instead of trying to show a `SnackBar` on a screen that's about to be replaced.
+  In `order_detail_screen.dart`: read `args['tableSeatConflict'] as bool? ?? false` in `didChangeDependencies`; if true, schedule (`WidgetsBinding.instance.addPostFrameCallback`) a one-time `SnackBar` — "Это место только что заняли, выберите другое" — same message text used by `TableSelectionScreen`'s own conflict handling, for consistency.
+  Logging: verbose on both ends — table pre-selection/clear in `new_order_screen.dart`, and the conflict-flag detection in `order_detail_screen.dart`.
+  Dependency: blocked by Tasks 13, 14.
+
+- [x] **Task 16 — Tests: `createOrder` tableId/guestCount + `TableSelectionResult` shape**
+  File: `test/table_selection_test.dart`
+  Add cases to the existing `GQLMutations.createOrder`-adjacent tests (or a new `group`) asserting: `tableId`/`guestCount` are embedded when provided; both are omitted from the built string when `tableId` is not provided (i.e. the existing no-table `createOrder` call shape is unchanged — regression guard for the original flow); the response selection set includes `tableId tableLabel tableSeatConflict`.
+  Dependency: blocked by Task 13.
+
+**Commit checkpoint 5**: `feat(order): let the guest pick a table when creating a new order`
+
 ## Next Steps
 
 To start implementation, run `/aif-implement`. To view/manage tasks, use `/tasks` or `TaskList` (if unavailable in this session, follow the checklist above directly).

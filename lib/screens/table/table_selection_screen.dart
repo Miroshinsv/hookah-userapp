@@ -12,24 +12,35 @@ import '../../core/utils/logger.dart';
 import '../../widgets/floor_plan/floor_plan_painter.dart';
 
 class TableSelectionResult {
-  final String sessionId;
+  final String? sessionId;
   final String tableId;
   final String tableLabel;
+  final int guestCount;
 
   const TableSelectionResult({
-    required this.sessionId,
+    this.sessionId,
     required this.tableId,
     required this.tableLabel,
+    required this.guestCount,
   });
 }
 
-// Полноэкранная карта зала для выбора стола к уже созданному заказу
-// (sitplace.txt). Пушится через Navigator.push и возвращает
-// TableSelectionResult через Navigator.pop при успешном выборе — вызывающий
-// экран (order_detail_screen.dart) сам сохраняет результат в свой Order.
+// Полноэкранная карта зала для выбора стола. Пушится через Navigator.push и
+// возвращает TableSelectionResult через Navigator.pop при успешном выборе.
+//
+// Два режима, различаемые по `orderId`:
+// - `orderId != null` — стол выбирается для уже созданного заказа
+//   (order_detail_screen.dart): тап по свободному столу сразу вызывает
+//   openTableSession, sessionId в результате гарантированно не null.
+// - `orderId == null` — "предзаказный" режим (new_order_screen.dart): заказа
+//   ещё не существует, openTableSession вызвать нельзя (мутация требует
+//   реальный orderId) — тап по столу только возвращает выбор вызывающему
+//   коду, который сам передаст tableId/guestCount в createOrder. Реальная
+//   попытка забронировать стол и обработка гонки происходят там же, на
+//   сервере, внутри createOrder (см. sitplace.txt).
 class TableSelectionScreen extends StatefulWidget {
   final String loungeId;
-  final String orderId;
+  final String? orderId;
 
   const TableSelectionScreen({
     super.key,
@@ -222,16 +233,36 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
       return;
     }
 
+    final orderId = widget.orderId;
+    if (orderId == null) {
+      // Предзаказный режим — заказа ещё нет, openTableSession вызвать нельзя.
+      // Возвращаем выбор как есть; окончательная попытка забронировать стол
+      // и обработка гонки — на сервере, внутри createOrder.
+      AppLogger.d(
+        _tag,
+        'pre-order selection tableId=${table.tableId} guestCount=$guestCount (no mutation call)',
+      );
+      Navigator.pop(
+        context,
+        TableSelectionResult(
+          tableId: table.tableId,
+          tableLabel: table.label ?? table.tableId,
+          guestCount: guestCount,
+        ),
+      );
+      return;
+    }
+
     AppLogger.d(
       _tag,
       'openTableSession tableId=${table.tableId} loungeId=${widget.loungeId} '
-      'orderId=${widget.orderId} guestCount=$guestCount',
+      'orderId=$orderId guestCount=$guestCount',
     );
     final result = await _client.mutate(MutationOptions(
       document: gql(GQLMutations.openTableSession(
         tableId: table.tableId,
         loungeId: widget.loungeId,
-        orderId: widget.orderId,
+        orderId: orderId,
         guestCount: guestCount,
       )),
     ));
@@ -261,6 +292,7 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
         sessionId: sessionId,
         tableId: resultTableId,
         tableLabel: table.label ?? table.tableId,
+        guestCount: guestCount,
       ),
     );
   }

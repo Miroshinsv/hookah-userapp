@@ -3,11 +3,13 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/mutations.dart';
+import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/models/order.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/phone_hash.dart';
 import '../table/menu_item_picker.dart';
+import '../table/table_selection_screen.dart';
 
 class NewOrderScreen extends StatefulWidget {
   const NewOrderScreen({super.key});
@@ -47,8 +49,84 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   // orderId — добавить позиции в самой мутации createOrder нельзя.
   final List<MenuItemPickResult> _cartItems = [];
 
+  bool _tablesEnabled = false;
+  bool _tablesEnabledLoaded = false;
+  bool _selectingTable = false;
+  String? _selectedTableId;
+  String? _selectedTableLabel;
+  int? _selectedGuestCount;
+
   double get _cartSubtotal =>
       _cartItems.fold(0.0, (sum, c) => sum + c.item.price * c.quantity);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_tablesEnabledLoaded) {
+      _tablesEnabledLoaded = true;
+      final lounge = ModalRoute.of(context)!.settings.arguments as Lounge;
+      _loadTablesEnabled(lounge.id);
+    }
+  }
+
+  // Не блокирует остальную загрузку экрана — кнопка "Место" просто остаётся
+  // скрытой, пока флаг не резолвится (или если фича вообще не настроена для
+  // этого лаунджа / запрос упал), см. sitplace.txt.
+  Future<void> _loadTablesEnabled(String loungeId) async {
+    final client = GraphQLProvider.of(context).value;
+    final result = await client.query(QueryOptions(
+      document: gql(GQLQueries.isTablesEnabled(loungeId)),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted) return;
+    if (result.hasException) {
+      AppLogger.w(_tag, 'isTablesEnabled failed loungeId=$loungeId', result.exception);
+      return;
+    }
+    final enabled = result.data?['isTablesEnabled'] as bool? ?? false;
+    AppLogger.d(_tag, 'isTablesEnabled loungeId=$loungeId enabled=$enabled');
+    setState(() => _tablesEnabled = enabled);
+  }
+
+  // Предзаказный выбор стола — заказа ещё нет, поэтому TableSelectionScreen
+  // пушится с orderId: null (см. Task 14) и просто возвращает выбор, не
+  // вызывая openTableSession. Реальная попытка занять стол происходит
+  // внутри createOrder при отправке формы (_submit).
+  Future<void> _selectTable(Lounge lounge) async {
+    setState(() => _selectingTable = true);
+    AppLogger.d(_tag, 'open pre-order table selection loungeId=${lounge.id}');
+
+    final result = await Navigator.push<TableSelectionResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TableSelectionScreen(loungeId: lounge.id, orderId: null),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => _selectingTable = false);
+    if (result == null) return;
+
+    setState(() {
+      _selectedTableId = result.tableId;
+      _selectedTableLabel = result.tableLabel;
+      _selectedGuestCount = result.guestCount;
+    });
+    AppLogger.i(
+      _tag,
+      'table pre-selected tableId=${result.tableId} tableLabel=${result.tableLabel} '
+      'guestCount=${result.guestCount}',
+    );
+  }
+
+  void _clearSelectedTable() {
+    AppLogger.d(_tag, 'clear pre-selected table tableId=$_selectedTableId');
+    setState(() {
+      _selectedTableId = null;
+      _selectedTableLabel = null;
+      _selectedGuestCount = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -137,6 +215,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         phoneLast4: PhoneHash.last4(phone),
         phoneMock:  PhoneHash.mock(phone),
         arrivalAt:  _arrivalAt!.toUtc().toIso8601String(),
+        tableId:    _selectedTableId,
+        guestCount: _selectedTableId != null ? _selectedGuestCount : null,
       )),
     ));
 
@@ -167,8 +247,20 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         if (!mounted) return;
       }
 
-      Navigator.pushReplacementNamed(context, '/order',
-          arguments: {'order': order, 'lounge': lounge});
+      final tableSeatConflict = orderData['tableSeatConflict'] as bool? ?? false;
+      if (tableSeatConflict) {
+        AppLogger.w(
+          _tag,
+          'createOrder table conflict orderId=${order.id} tableId=$_selectedTableId — '
+          'order created without the table, guest must retry from the order screen',
+        );
+      }
+
+      Navigator.pushReplacementNamed(context, '/order', arguments: {
+        'order': order,
+        'lounge': lounge,
+        'tableSeatConflict': tableSeatConflict,
+      });
     }
   }
 
@@ -342,6 +434,36 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                   label: const Text('меню'),
                 ),
               ),
+              if (_tablesEnabled) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _loading || _selectingTable ? null : () => _selectTable(lounge),
+                    icon: const Icon(Icons.event_seat),
+                    label: const Text('место'),
+                  ),
+                ),
+                if (_selectedTableLabel != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Стол: $_selectedTableLabel · $_selectedGuestCount гостей',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _loading ? null : _clearSelectedTable,
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Убрать выбор стола',
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ],
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),

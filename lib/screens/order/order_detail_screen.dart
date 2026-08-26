@@ -76,6 +76,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         (_) => _fetchMessages(),
       );
       _loadTablesEnabled();
+
+      // Заказ мог быть создан на new_order_screen.dart с уже выбранным
+      // столом, который не удалось забронировать из-за гонки —
+      // Order.tableId в этом случае null, а флаг передан явно через
+      // навигационные аргументы (сама createOrder не отдаёт tableSeatConflict
+      // повторно при последующих запросах orders, см. sitplace.txt).
+      if (args['tableSeatConflict'] == true) {
+        AppLogger.w(_tag, 'createOrder table conflict surfaced orderId=${_order.id}');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Это место только что заняли, выберите другое')),
+          );
+        });
+      }
     }
   }
 
