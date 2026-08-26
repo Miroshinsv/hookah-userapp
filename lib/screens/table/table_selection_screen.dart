@@ -55,6 +55,7 @@ class TableSelectionScreen extends StatefulWidget {
 class _TableSelectionScreenState extends State<TableSelectionScreen> {
   static const _tag = 'TableSelection';
   static const _markerSize = 56.0;
+  static const _kBadgesRowHeight = 26.0;
   static const _defaultCanvasSize = Size(800, 560);
 
   bool _loading = true;
@@ -340,8 +341,11 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
     var maxX = _defaultCanvasSize.width;
     var maxY = _defaultCanvasSize.height;
     for (final table in _tables) {
+      // + запас снизу под бейджи вместимости/удобств под кругом стола.
       if (table.x + _markerSize > maxX) maxX = table.x + _markerSize;
-      if (table.y + _markerSize > maxY) maxY = table.y + _markerSize;
+      if (table.y + _markerSize + _kBadgesRowHeight > maxY) {
+        maxY = table.y + _markerSize + _kBadgesRowHeight;
+      }
     }
     for (final wall in _floorPlan.walls) {
       for (final point in wall.points) {
@@ -427,6 +431,11 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
         break;
     }
     final tappable = status == TableOccupancyStatus.free;
+    // Те же удобства, что и в веб-админке (модуль «Столы»): "tv"/"playstation"
+    // из TableItem.properties — неизвестные значения молча игнорируются
+    // (см. TableItem._parseProperties).
+    final hasTv = table.properties.contains('tv');
+    final hasPlaystation = table.properties.contains('playstation');
 
     return Positioned(
       left: table.x - _markerSize / 2,
@@ -434,32 +443,83 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
       child: Transform.rotate(
         angle: table.rotation * math.pi / 180,
         child: Tooltip(
-          message: '${table.label ?? table.tableId} · ${table.seats} мест · $statusLabel',
+          message: '${table.label ?? table.tableId} · ${table.seats} мест · $statusLabel'
+              '${hasTv ? ' · ТВ' : ''}${hasPlaystation ? ' · приставка' : ''}',
           child: GestureDetector(
             onTap: tappable ? () => _onTableTap(table) : null,
-            child: Container(
-              width: _markerSize,
-              height: _markerSize,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: tappable ? 0.85 : 0.5),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                table.label ?? table.tableId,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: _markerSize,
+                  height: _markerSize,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: tappable ? 0.85 : 0.5),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    table.label ?? table.tableId,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _AmenityBadge(icon: Icons.people, label: '${table.seats}'),
+                    if (hasTv) ...[
+                      const SizedBox(width: 2),
+                      const _AmenityBadge(icon: Icons.tv),
+                    ],
+                    if (hasPlaystation) ...[
+                      const SizedBox(width: 2),
+                      const _AmenityBadge(icon: Icons.sports_esports),
+                    ],
+                  ],
+                ),
+              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// Маленький значок под столом — вместимость (иконка + число) или удобство
+// (tv/playstation, только иконка), в стиле карточек стола веб-админки.
+class _AmenityBadge extends StatelessWidget {
+  final IconData icon;
+  final String? label;
+
+  const _AmenityBadge({required this.icon, this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: label != null ? 4 : 3, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: Colors.white),
+          if (label != null) ...[
+            const SizedBox(width: 2),
+            Text(label!, style: const TextStyle(color: Colors.white, fontSize: 10)),
+          ],
+        ],
       ),
     );
   }

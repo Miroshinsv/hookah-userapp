@@ -18,7 +18,7 @@
 `TableSelectionScreen` загружает параллельно (`Future.wait`) три запроса: `floorPlan`, `tables`, `activeSessions`. Рендеринг:
 
 - **`FloorPlanPainter`** (`lib/widgets/floor_plan/floor_plan_painter.dart`, `CustomPainter`) рисует зоны (именованные area с заливкой), стены (ломаные линии), окна и двери (двери — пунктиром) — всё из `FloorPlan` (`lib/core/models/floor_plan.dart`), которая сама распаковывает JSON-блоб из `floorPlan.walls` (бэкенд отдаёт план помещения как строку, не как объект).
-- Столы — обычные `Positioned`-виджеты поверх `CustomPaint`, а не часть канваса: так проще и надёжнее сделать тап по столу, чем ручной hit-testing на канвасе. Каждый маркер повёрнут на `table.rotation` и подписан `table.label ?? table.tableId`.
+- Столы — обычные `Positioned`-виджеты поверх `CustomPaint`, а не часть канваса: так проще и надёжнее сделать тап по столу, чем ручной hit-testing на канвасе. Каждый маркер повёрнут на `table.rotation` и подписан `table.label ?? table.tableId`. Под кругом стола — те же удобства, что и в карточках стола веб-админки: бейдж вместимости (иконка человечков + `table.seats`) и, если присутствуют в `table.properties`, значки ТВ (`tv`) и игровой приставки (`playstation`).
 - Панорамирование и зум — `InteractiveViewer` вокруг фиксированного по размеру `Stack` (размер холста подстраивается под содержимое, минимум 800×560, как в веб-админке).
 - В проекте нет других экранов на `CustomPainter`/`InteractiveViewer` — этот паттерн введён впервые именно здесь, без новых зависимостей (только `dart:ui`/`package:flutter`).
 
