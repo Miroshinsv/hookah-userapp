@@ -2,16 +2,16 @@
 
 # Выбор стола на карте зала
 
-Гость может выбрать конкретный стол для уже созданного заказа на карте зала лаунджа, вместо того чтобы указывать это словами в комментарии. Фича опциональна — включена только для тех лаунджей, у которых настроена карта зала.
+Гость может выбрать конкретный стол на карте зала лауджа вместо того, чтобы указывать это словами в комментарии — как для уже созданного заказа, так и в момент его оформления. Фича опциональна — включена только для тех лаунджей, у которых настроена карта зала.
 
-## Точка входа
+## Точки входа
 
-Кнопка **«Место»** (`Icons.event_seat`) — сосед кнопки «Меню» в панели ввода чата заказа (`order_detail_screen.dart`, `_buildInput()`). Видна только при выполнении обоих условий:
+Две точки входа, оба гейтятся `isTablesEnabled(loungeId)` (проверяется один раз при открытии экрана, не блокирует остальную загрузку; если запрос упал или фича не настроена для лауджа — кнопка просто не показывается, без ошибок в UI):
 
-1. `Order.isEditable` — тот же гейт, что и у кнопки «Меню» (статус `new`, `in_progress` или `calculation`).
-2. `isTablesEnabled(loungeId)` вернул `true` — проверяется один раз при открытии экрана заказа (`_loadTablesEnabled()`), не блокирует остальную загрузку. Если запрос упал или фича не настроена для лауджа — кнопка просто не показывается, без ошибок в UI.
+1. Кнопка **«Место»** (`Icons.event_seat`) на экране **создания** заказа (`new_order_screen.dart`, рядом с кнопкой «меню») — стола ещё нет, выбор хранится локально (`_selectedTableId`/`_selectedTableLabel`/`_selectedGuestCount`) и передаётся в `createOrder(tableId, guestCount)` при отправке формы.
+2. Кнопка **«Место»** — сосед кнопки «Меню» в панели ввода чата **уже созданного** заказа (`order_detail_screen.dart`, `_buildInput()`), видна дополнительно только пока `Order.isEditable` (статус `new`, `in_progress` или `calculation`) — тот же гейт, что и у «Меню».
 
-Нажатие открывает `TableSelectionScreen` (`lib/screens/table/table_selection_screen.dart`) через `Navigator.push`, передавая `loungeId` и `orderId` текущего заказа.
+Обе кнопки открывают один и тот же `TableSelectionScreen` (`lib/screens/table/table_selection_screen.dart`) через `Navigator.push`, но в разных режимах — см. «Два режима» ниже.
 
 ## Карта зала
 
@@ -37,13 +37,21 @@
 ## Выбор стола и подтверждение
 
 1. Тап по свободному столу открывает диалог выбора числа гостей (шаг 1, ограничен сверху `table.seats`).
-2. Прямо перед отправкой мутации `TableSelectionScreen` ещё раз обновляет `tables`/`activeSessions` и перепроверяет, что стол всё ещё свободен — состояние могло измениться, пока гость рассматривал карту.
-3. Вызывается `openTableSession(tableId, loungeId, orderId, guestCount, failIfOccupied: true)` — `failIfOccupied` захардкожен в билдере мутации (`lib/core/graphql/mutations.dart`) и никогда не передаётся вызывающим кодом.
-4. При успехе экран возвращает `TableSelectionResult` через `Navigator.pop`; `order_detail_screen.dart` сохраняет `tableId`/`tableLabel` в `Order` (`copyWith`), показывает тост «Вы выбрали стол …» и постоянную строку «Стол: …» в блоке информации о заказе.
+2. Прямо перед отправкой `TableSelectionScreen` ещё раз обновляет `tables`/`activeSessions` и перепроверяет, что стол всё ещё свободен — состояние могло измениться, пока гость рассматривал карту.
+3. Дальше поведение расходится по режиму — см. ниже.
+
+### Два режима: существующий заказ vs. создание заказа
+
+`TableSelectionScreen` принимает `orderId` как `String?` — им и определяется режим:
+
+- **`orderId != null`** (кнопка из `order_detail_screen.dart`) — вызывается `openTableSession(tableId, loungeId, orderId, guestCount, failIfOccupied: true)` сразу на этом экране; `failIfOccupied` захардкожен в билдере мутации (`lib/core/graphql/mutations.dart`) и никогда не передаётся вызывающим кодом. При успехе экран возвращает `TableSelectionResult` (с непустым `sessionId`) через `Navigator.pop`; `order_detail_screen.dart` сохраняет `tableId`/`tableLabel` в `Order` (`copyWith`), показывает тост «Вы выбрали стол …» и постоянную строку «Стол: …» в блоке информации о заказе.
+- **`orderId == null`** (кнопка из `new_order_screen.dart`) — заказа ещё не существует, вызвать `openTableSession` нельзя (мутации нужен реальный `orderId`). Экран сразу возвращает `TableSelectionResult` с `sessionId: null` — это только предварительный выбор, без фактического бронирования. `new_order_screen.dart` хранит его локально и передаёт как `tableId`/`guestCount` в `createOrder` при отправке формы; окончательная попытка занять стол и обработка гонки происходят там же, на сервере, внутри `createOrder`.
 
 ## Обработка ошибок и гонка за стол
 
-Гонка (два гостя выбрали один стол почти одновременно) — не фатальна: сервер отвечает ошибкой с текстом `"table occupied"`, заказ при этом не ломается.
+Гонка (два гостя выбрали один стол почти одновременно) — не фатальна ни в одном режиме: заказ/сессия всё равно успешно создаются.
+
+**Существующий заказ (`openTableSession`)** — сервер отвечает ошибкой с текстом `"table occupied"`:
 
 | Ошибка backend | Реакция UI |
 |---|---|
@@ -54,9 +62,12 @@
 | содержит `tables service is not running` | Тост «Выбор стола временно недоступен» |
 | прочее | Тост с текстом ошибки сервера |
 
+**Создание заказа (`createOrder`)** — гонка не возвращается как ошибка мутации: заказ создаётся успешно, но в ответе `tableId: null, tableSeatConflict: true`. `new_order_screen.dart` передаёт этот флаг через аргументы навигации на `/order` (а не через `SnackBar` на экране, который вот-вот заменится), и `order_detail_screen.dart` показывает тот же тост «Это место только что заняли, выберите другое» сразу после открытия — тем же текстом, что и в первом режиме, для единообразия.
+
 ## See Also
 
 - [Guest Table Sessions, Tobacco Catalog & Push](guest-table-sessions.md) — join-only выбор стола персоналом/гостем через уже открытую сессию, отдельный от описанного здесь флоу выбора места к своему заказу.
 - [Order Menu Items](order-menu-items.md) — кнопка «Меню», прямой сосед кнопки «Место» в той же панели ввода.
-- `lib/core/graphql/queries.dart` / `lib/core/graphql/mutations.dart` — `isTablesEnabled`, `floorPlan`, `tables`, `activeSessions`, `openTableSession`.
+- `lib/core/graphql/queries.dart` / `lib/core/graphql/mutations.dart` — `isTablesEnabled`, `floorPlan`, `tables`, `activeSessions`, `openTableSession`, `createOrder` (с опциональными `tableId`/`guestCount`).
 - `lib/core/models/floor_plan.dart`, `lib/core/models/table_session.dart`, `lib/core/models/order.dart` — модели и правило классификации занятости.
+- `lib/screens/order/new_order_screen.dart` — предзаказный вход в `TableSelectionScreen`.
