@@ -1,4 +1,4 @@
-[← Guest Table Sessions, Tobacco Catalog & Push](guest-table-sessions.md) · [Back to README](../README.md)
+[← Guest Table Sessions, Tobacco Catalog & Push](guest-table-sessions.md) · [Back to README](../README.md) · [Table Selection →](table-selection.md)
 
 # Позиции меню в заказе
 
@@ -117,6 +117,7 @@ Payload `newMessage` не содержит `id`/`createdAt` (бэкенд их �
 
 ## See Also
 
+- [Table Selection](table-selection.md) — кнопка «Место», её сосед в панели ввода чата заказа: выбор конкретного стола на карте зала для этого же заказа.
 - [Guest Table Sessions, Tobacco Catalog & Push](guest-table-sessions.md) — тот же `showMenuItemPicker`, используется и для дозаказа за столом, и здесь; там же описана доставка push-уведомлений.
 - `lib/core/graphql/mutations.dart` / `lib/core/graphql/queries.dart` — где определены `addOrderItems` и расширенный запрос `orders`.
 - `lib/core/models/order.dart` — модели `Order`, `OrderMenuItem`, `OrderHookahItem` и геттер `isEditable`.

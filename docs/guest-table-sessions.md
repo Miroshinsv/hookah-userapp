@@ -12,7 +12,9 @@ A staff member opens a `TableSession` for a table when seating guests. Once open
 2. See every table at that lounge, cross-referenced against currently active sessions (`tables` + `activeSessions` gateway queries).
 3. Tap a table that already has an active session to join it.
 
-**The guest app never opens or closes a session itself.** Calling the gateway's `openTableSession` mutation again for a table that already has an active session silently closes the existing one — so the app only ever reads `activeSessions` and joins what's already there. Opening/closing a session remains a staff-only action performed in the seating panel. A regression test (`test/screens/table/my_table_screen_guard_test.dart`) guards against this changing by accident.
+**This screen never opens or closes a session itself.** Calling the gateway's `openTableSession` mutation again for a table that already has an active session silently closes the existing one — so `my_table_screen.dart` only ever reads `activeSessions` and joins what's already there. Closing a session remains a staff-only action performed in the seating panel, full stop.
+
+Opening a session is no longer staff-only across the whole app, though: a guest can open one for their *own* order from the order screen — see [Table Selection](table-selection.md). The regression test (`test/screens/table/my_table_screen_guard_test.dart`) was narrowed accordingly — it still guards `my_table_screen.dart` staying join-only and bans `closeTableSession` outright, but no longer bans `openTableSession` app-wide.
 
 Tables with no active session are shown disabled with a prompt to ask staff to open one.
 
@@ -55,6 +57,7 @@ When the backend changes an order's status (`order.UpdateStatus` / `order.Submit
 
 ## See Also
 
+- [Table Selection](table-selection.md) — the guest's *own* `openTableSession` flow, from the order screen, distinct from the join-only flow described above.
 - Backend GraphQL contract: `gateway/internal/delivery/graphql/schema.go` in the `hookah_backend` repo (`tables`, `activeSessions`, `sessionItems`, `addSessionItem`, `tobaccos`, `registerDevice`, `unregisterDevice`).
 - `lib/core/graphql/queries.dart` / `lib/core/graphql/mutations.dart` — where every GraphQL operation used by this feature is defined.
 - `lib/core/notifications/` — `push_service.dart` (FCM plumbing), `notification_service.dart` (local notification display/tap), `order_push_payload.dart` (payload parsing), `push_navigation.dart` (tap → refetch → deep link).
