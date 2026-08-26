@@ -118,7 +118,7 @@ Source spec: `/home/msv/GolandProjects/hookah_backend/sitplace.txt` — full Gra
 
 ### Phase 3: Order screen integration
 
-- [ ] **Task 9 — Gate + wire the "Место" button in `order_detail_screen.dart`**
+- [x] **Task 9 — Gate + wire the "Место" button in `order_detail_screen.dart`**
   File: `lib/screens/order/order_detail_screen.dart`
   Add a `bool _tablesEnabled = false;` state field. In the same load path where `_lounge`/`_order` are resolved (`didChangeDependencies`/existing init flow), fire `GQLQueries.isTablesEnabled(_order.loungeId)` once (non-blocking relative to the rest of the screen's content — don't gate the whole screen's loading spinner on this single flag) and `setState(() => _tablesEnabled = result)` on completion; default `false` (button hidden) until resolved or on error.
   In `_buildInput()`, inside the existing `if (_order.isEditable) [...]` block, add a second `IconButton` (e.g. `Icons.event_seat` or `Icons.table_restaurant`, tooltip `'Место'`) right after the existing "Меню" button, shown/enabled only when `_tablesEnabled == true`. `onPressed` (guarded by a busy-flag `_selectingTable`, mirroring `_addingMenuItem`):
@@ -129,7 +129,7 @@ Source spec: `/home/msv/GolandProjects/hookah_backend/sitplace.txt` — full Gra
   Logging: `AppLogger.d` on button press/navigation, `AppLogger.i` on successful table assignment (`tableId=`, `tableLabel=`), `AppLogger.w` if `isTablesEnabled` query fails (non-fatal — button just stays hidden).
   Dependency: blocked by Tasks 5, 7, 8.
 
-- [ ] **Task 10 — Show the assigned table somewhere visible in the order UI**
+- [x] **Task 10 — Show the assigned table somewhere visible in the order UI**
   File: `lib/screens/order/order_detail_screen.dart`
   Where the order's summary/status info is already displayed near the top of the screen (find the existing header/info area that shows order status/arrival time), add a small line/chip showing `"Стол: ${_order.tableLabel}"` when `_order.tableLabel != null`, so the guest has persistent confirmation beyond the one-time `SnackBar`. Keep this minimal — no new dedicated section, just one line matching the existing info style.
   Logging: none (pure display, no new async logic).

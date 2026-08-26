@@ -16,6 +16,7 @@ import '../../core/utils/logger.dart';
 import '../../widgets/feedback_sheet.dart';
 import '../../widgets/status_badge.dart';
 import '../table/menu_item_picker.dart';
+import '../table/table_selection_screen.dart';
 
 const _terminalFeedbackStatuses = {
   'completed',
@@ -46,6 +47,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isAtBottom  = true;
   bool _feedbackShown = false;
   bool _addingMenuItem = false;
+  bool _selectingTable = false;
+  bool _tablesEnabled = false;
   late GraphQLClient _graphqlClient;
   late UnreadState _unreadState;
 
@@ -72,7 +75,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         const Duration(seconds: 4),
         (_) => _fetchMessages(),
       );
+      _loadTablesEnabled();
     }
+  }
+
+  // Не блокирует остальную загрузку экрана — кнопка "Место" просто остаётся
+  // скрытой, пока флаг не резолвится (или если фича вообще не настроена для
+  // этого лаунджа / запрос упал), см. sitplace.txt.
+  Future<void> _loadTablesEnabled() async {
+    final result = await _graphqlClient.query(QueryOptions(
+      document: gql(GQLQueries.isTablesEnabled(_order.loungeId)),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted) return;
+    if (result.hasException) {
+      AppLogger.w(_tag, 'isTablesEnabled failed loungeId=${_order.loungeId}', result.exception);
+      return;
+    }
+    final enabled = result.data?['isTablesEnabled'] as bool? ?? false;
+    AppLogger.d(_tag, 'isTablesEnabled loungeId=${_order.loungeId} enabled=$enabled');
+    setState(() => _tablesEnabled = enabled);
   }
 
   void _onScroll() {
@@ -237,6 +259,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               if (_order.arrivalAt != null)
                 Text('Прибытие: ${_formatDateTime(_order.arrivalAt!)}',
                     style: const TextStyle(color: Colors.grey)),
+              if (_order.tableLabel != null)
+                Text('Стол: ${_order.tableLabel}',
+                    style: const TextStyle(color: Colors.grey)),
               const SizedBox(height: 10),
               Row(
                 children: [
@@ -390,6 +415,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       'addOrderItems ok orderId=${_order.id} menuItems=${_order.menuItems.length} '
       'hookahItems=${_order.hookahItems.length} finalTotal=${_order.finalTotal}',
     );
+  }
+
+  // Открывает карту зала для выбора стола к этому заказу (sitplace.txt).
+  // Мутацию openTableSession и обработку конфликта "table occupied" делает
+  // сам TableSelectionScreen — сюда возвращается только успешный результат.
+  Future<void> _selectTable() async {
+    setState(() => _selectingTable = true);
+    AppLogger.d(_tag, 'open table selection orderId=${_order.id} loungeId=${_order.loungeId}');
+
+    final result = await Navigator.push<TableSelectionResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TableSelectionScreen(
+          loungeId: _order.loungeId,
+          orderId: _order.id,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => _selectingTable = false);
+    if (result == null) return;
+
+    setState(() {
+      _order = _order.copyWith(tableId: result.tableId, tableLabel: result.tableLabel);
+    });
+    AppLogger.i(
+      _tag,
+      'table selected orderId=${_order.id} tableId=${result.tableId} tableLabel=${result.tableLabel}',
+    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Вы выбрали стол ${result.tableLabel}')));
   }
 
   // Реакция на ошибки addOrderItems по order.txt разделу 5. "unauthorized"
@@ -601,6 +658,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 tooltip: 'Меню',
               ),
               const SizedBox(width: 4),
+              if (_tablesEnabled) ...[
+                IconButton(
+                  onPressed: _selectingTable ? null : _selectTable,
+                  icon: const Icon(Icons.event_seat),
+                  tooltip: 'Место',
+                ),
+                const SizedBox(width: 4),
+              ],
             ],
             Expanded(
               child: TextField(
