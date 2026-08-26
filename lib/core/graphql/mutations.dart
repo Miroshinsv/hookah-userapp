@@ -175,6 +175,31 @@ class GQLMutations {
     }
   ''';
 
+  // Выбор/повторный выбор стола гостем для уже созданного заказа
+  // (sitplace.txt). `failIfOccupied` захардкожен в `true` и никогда не
+  // выставляется вызывающим кодом — это обязательное условие безопасного
+  // гостевого флоу ("не отбирать место у другого гостя"), ослаблять нельзя.
+  static String openTableSession({
+    required String tableId,
+    required String loungeId,
+    required String orderId,
+    required int guestCount,
+  }) => '''
+    mutation {
+      openTableSession(
+        tableId: ${jsonEncode(tableId)}
+        loungeId: ${jsonEncode(loungeId)}
+        orderId: ${jsonEncode(orderId)}
+        guestCount: $guestCount
+        failIfOccupied: true
+      ) {
+        sessionId
+        tableId
+        status
+      }
+    }
+  ''';
+
   // Дозаказ позиций меню в уже существующий заказ (order.txt раздел 3) —
   // hookahItems сознательно не передаётся, вне объёма этой фичи. Один
   // элемент списка на вызов — соответствует однопозиционному UX

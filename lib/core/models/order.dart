@@ -69,6 +69,9 @@ class Order {
   final List<OrderHookahItem> hookahItems;
   final double? subtotal;
   final double? finalTotal;
+  final String? tableId;
+  final String? tableLabel;
+  final bool tableSeatConflict;
 
   const Order({
     required this.id,
@@ -83,6 +86,9 @@ class Order {
     this.hookahItems = const [],
     this.subtotal,
     this.finalTotal,
+    this.tableId,
+    this.tableLabel,
+    this.tableSeatConflict = false,
   });
 
   bool get isEditable => _editableOrderStatuses.contains(status);
@@ -106,6 +112,9 @@ class Order {
             const [],
         subtotal: (json['subtotal'] as num?)?.toDouble(),
         finalTotal: (json['finalTotal'] as num?)?.toDouble(),
+        tableId: json['tableId'] as String?,
+        tableLabel: json['tableLabel'] as String?,
+        tableSeatConflict: json['tableSeatConflict'] as bool? ?? false,
       );
 
   Order copyWith({
@@ -114,6 +123,9 @@ class Order {
     List<OrderHookahItem>? hookahItems,
     double? subtotal,
     double? finalTotal,
+    String? tableId,
+    String? tableLabel,
+    bool? tableSeatConflict,
   }) =>
       Order(
         id: id,
@@ -128,5 +140,8 @@ class Order {
         hookahItems: hookahItems ?? this.hookahItems,
         subtotal: subtotal ?? this.subtotal,
         finalTotal: finalTotal ?? this.finalTotal,
+        tableId: tableId ?? this.tableId,
+        tableLabel: tableLabel ?? this.tableLabel,
+        tableSeatConflict: tableSeatConflict ?? this.tableSeatConflict,
       );
 }

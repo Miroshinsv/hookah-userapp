@@ -238,7 +238,23 @@ class GQLQueries {
         orderId
         guestCount
         status
+        bookedFor
         openedAt
+      }
+    }
+  ''';
+
+  static String isTablesEnabled(String loungeId) => '''
+    query {
+      isTablesEnabled(loungeId: ${jsonEncode(loungeId)})
+    }
+  ''';
+
+  static String floorPlan(String loungeId) => '''
+    query {
+      floorPlan(loungeId: ${jsonEncode(loungeId)}) {
+        walls
+        updatedAt
       }
     }
   ''';
