@@ -455,7 +455,7 @@ class _TableSelectionScreenState extends State<TableSelectionScreen> {
                   height: _markerSize,
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: tappable ? 0.85 : 0.5),
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.white, width: 2),
                   ),
                   alignment: Alignment.center,
