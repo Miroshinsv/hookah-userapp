@@ -32,6 +32,10 @@ class OrderHookahItem {
   final int quantity;
   final double unitPrice;
   final String status;
+  final String? source;
+  final String? templateId;
+  final int? strength;
+  final String? comment;
 
   const OrderHookahItem({
     required this.id,
@@ -40,6 +44,10 @@ class OrderHookahItem {
     required this.quantity,
     required this.unitPrice,
     required this.status,
+    this.source,
+    this.templateId,
+    this.strength,
+    this.comment,
   });
 
   factory OrderHookahItem.fromJson(Map<String, dynamic> json) => OrderHookahItem(
@@ -49,6 +57,10 @@ class OrderHookahItem {
         quantity: (json['quantity'] as num?)?.toInt() ?? 1,
         unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0.0,
         status: json['status'] as String? ?? 'new',
+        source: json['source'] as String?,
+        templateId: json['templateId'] as String?,
+        strength: (json['strength'] as num?)?.toInt(),
+        comment: json['comment'] as String?,
       );
 }
 

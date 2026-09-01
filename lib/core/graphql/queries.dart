@@ -98,7 +98,7 @@ class GQLQueries {
         status
         createdAt
         menuItems { id menuItemId name quantity unitPrice status }
-        hookahItems { id name flavor quantity unitPrice status }
+        hookahItems { id name flavor source templateId strength comment quantity unitPrice status }
         subtotal
         finalTotal
       }
@@ -311,6 +311,47 @@ class GQLQueries {
         price
         createdAt
         updatedAt
+      }
+    }
+  ''';
+
+  static String hookahTemplates(String loungeId) => '''
+    query {
+      hookahTemplates(loungeId: ${jsonEncode(loungeId)}) {
+        templateId
+        name
+        strength
+        basePrice
+        fillingPropertyId
+        tobaccos { tobaccoId name flavor grammage price }
+        pricing { totalPrice }
+      }
+    }
+  ''';
+
+  static String defaultHookahTemplate(String loungeId) => '''
+    query {
+      defaultHookahTemplate(loungeId: ${jsonEncode(loungeId)}) {
+        templateId
+        name
+        strength
+        basePrice
+        fillingPropertyId
+        tobaccos { tobaccoId name flavor grammage price }
+        pricing { totalPrice }
+      }
+    }
+  ''';
+
+  // Без фильтра kind — тянем сразу filling и addon одним запросом, делим
+  // на клиенте (реальные значения kind: "filling", "addon").
+  static String paidProperties(String loungeId) => '''
+    query {
+      paidProperties(loungeId: ${jsonEncode(loungeId)}) {
+        propertyId
+        name
+        price
+        kind
       }
     }
   ''';

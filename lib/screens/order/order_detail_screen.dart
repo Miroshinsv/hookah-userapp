@@ -15,6 +15,7 @@ import '../../core/notifications/push_navigation.dart' show findOrderById;
 import '../../core/utils/logger.dart';
 import '../../widgets/feedback_sheet.dart';
 import '../../widgets/status_badge.dart';
+import '../table/hookah_item_picker.dart';
 import '../table/menu_item_picker.dart';
 import '../table/table_selection_screen.dart';
 
@@ -47,6 +48,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isAtBottom  = true;
   bool _feedbackShown = false;
   bool _addingMenuItem = false;
+  bool _addingHookah = false;
   bool _selectingTable = false;
   bool _tablesEnabled = false;
   late GraphQLClient _graphqlClient;
@@ -317,7 +319,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           _buildOrderItemRow(
               '${item.name}${item.flavor != null ? ' (${item.flavor})' : ''} × ${item.quantity}',
               item.unitPrice,
-              item.status),
+              item.status,
+              comment: item.comment),
         const SizedBox(height: 6),
         Text('Итого: ${_order.finalTotal?.toStringAsFixed(0) ?? '—'} ₽',
             style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -335,6 +338,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             label: const Text('меню'),
           ),
         ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _addingHookah ? null : _addHookah,
+            icon: _addingHookah
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.local_fire_department),
+            label: const Text('кальян'),
+          ),
+        ),
       ],
     ];
   }
@@ -344,7 +359,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   // отменили, даже не читая системное сообщение в чате (order.txt раздел
   // 1.b). Безвозвратно удалённые позиции (только admin) сюда не попадают —
   // их просто больше нет в menuItems/hookahItems после перезагрузки заказа.
-  Widget _buildOrderItemRow(String label, double unitPrice, String status) {
+  Widget _buildOrderItemRow(String label, double unitPrice, String status, {String? comment}) {
     final canceled = status == 'canceled';
     final style = TextStyle(
       color: Colors.grey,
@@ -352,27 +367,37 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: Text(label, style: style)),
-                if (canceled) ...[
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Отменено',
-                    style: TextStyle(
-                        color: Colors.redAccent,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(child: Text(label, style: style)),
+                    if (canceled) ...[
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Отменено',
+                        style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Text('${unitPrice.toStringAsFixed(0)} ₽', style: style),
+            ],
           ),
-          Text('${unitPrice.toStringAsFixed(0)} ₽', style: style),
+          if (comment != null && comment.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(comment, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            ),
         ],
       ),
     );
@@ -429,6 +454,57 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       _tag,
       'addOrderItems ok orderId=${_order.id} menuItems=${_order.menuItems.length} '
       'hookahItems=${_order.hookahItems.length} finalTotal=${_order.finalTotal}',
+    );
+  }
+
+  // Дозаказ кальяна в уже существующий заказ (hook.txt) — тот же
+  // addOrderItems, что и меню, просто с hookahItems вместо menuItems.
+  Future<void> _addHookah() async {
+    final picked = await showHookahItemPicker(context, loungeId: _order.loungeId);
+    if (picked == null || !mounted) return;
+
+    setState(() => _addingHookah = true);
+    AppLogger.d(
+      _tag,
+      'addOrderItems orderId=${_order.id} hookah=${picked.displayName} '
+      'quantity=${picked.input.quantity}',
+    );
+
+    final result = await _graphqlClient.mutate(MutationOptions(
+      document: gql(GQLMutations.addOrderItems(
+        orderId: _order.id,
+        loungeId: _order.loungeId,
+        hookahItems: [picked.input],
+      )),
+    ));
+
+    if (!mounted) return;
+    setState(() => _addingHookah = false);
+
+    if (result.hasException) {
+      _handleAddOrderItemsError(result.exception);
+      return;
+    }
+
+    final data = result.data?['addOrderItems'] as Map<String, dynamic>?;
+    if (data == null) return;
+    setState(() {
+      _order = _order.copyWith(
+        status: data['status'] as String?,
+        menuItems: (data['menuItems'] as List<dynamic>?)
+            ?.map((e) => OrderMenuItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        hookahItems: (data['hookahItems'] as List<dynamic>?)
+            ?.map((e) => OrderHookahItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        subtotal: (data['subtotal'] as num?)?.toDouble(),
+        finalTotal: (data['finalTotal'] as num?)?.toDouble(),
+      );
+    });
+    AppLogger.i(
+      _tag,
+      'addOrderItems ok orderId=${_order.id} hookahItems=${_order.hookahItems.length} '
+      'finalTotal=${_order.finalTotal}',
     );
   }
 
@@ -671,6 +747,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 onPressed: _addingMenuItem ? null : _addMenuItem,
                 icon: const Icon(Icons.restaurant_menu),
                 tooltip: 'Меню',
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: _addingHookah ? null : _addHookah,
+                icon: const Icon(Icons.local_fire_department),
+                tooltip: 'Кальян',
               ),
               const SizedBox(width: 4),
               if (_tablesEnabled) ...[

@@ -58,7 +58,6 @@ void main() {
   group('GQLMutations.createOrder — table selection at creation', () {
     String baseCall({String? tableId, int? guestCount}) => GQLMutations.createOrder(
           loungeId: '5',
-          flavor: 'Мята',
           phoneLast4: '1234',
           phoneMock: '+7 (900) ***-**-34',
           arrivalAt: '2026-08-25T20:00:00Z',

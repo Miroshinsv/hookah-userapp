@@ -8,6 +8,7 @@ import '../../core/models/lounge.dart';
 import '../../core/models/order.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/phone_hash.dart';
+import '../table/hookah_item_picker.dart';
 import '../table/menu_item_picker.dart';
 import '../table/table_selection_screen.dart';
 
@@ -37,7 +38,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   static const _tag = 'NewOrder';
 
   final _formKey    = GlobalKey<FormState>();
-  final _flavorCtrl = TextEditingController();
   final _commentCtrl = TextEditingController();
   DateTime? _arrivalAt;
   String?   _error;
@@ -48,6 +48,10 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   // addOrderItems, так как контракт addOrderItems требует существующий
   // orderId — добавить позиции в самой мутации createOrder нельзя.
   final List<MenuItemPickResult> _cartItems = [];
+  // Кальян, в отличие от меню, отправляется прямо в createOrder (аргумент
+  // hookahItems), поэтому отдельного докидывания через addOrderItems после
+  // создания заказа не требуется (hook.txt).
+  final List<HookahPickResult> _hookahCartItems = [];
 
   bool _tablesEnabled = false;
   bool _tablesEnabledLoaded = false;
@@ -58,6 +62,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   double get _cartSubtotal =>
       _cartItems.fold(0.0, (sum, c) => sum + c.item.price * c.quantity);
+
+  double get _hookahSubtotal =>
+      _hookahCartItems.fold(0.0, (sum, c) => sum + c.unitPrice * c.input.quantity);
 
   @override
   void didChangeDependencies() {
@@ -130,7 +137,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
   @override
   void dispose() {
-    _flavorCtrl.dispose();
     _commentCtrl.dispose();
     super.dispose();
   }
@@ -195,11 +201,31 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     setState(() => _cartItems.removeAt(index));
   }
 
+  Future<void> _addHookah(Lounge lounge) async {
+    final picked = await showHookahItemPicker(context, loungeId: lounge.id);
+    if (picked == null || !mounted) return;
+
+    AppLogger.d(_tag, 'hookah cart add ${picked.displayName} quantity=${picked.input.quantity}');
+    setState(() {
+      _hookahCartItems.add(picked);
+      _error = null;
+    });
+  }
+
+  void _removeHookahFromCart(int index) {
+    AppLogger.d(_tag, 'hookah cart remove ${_hookahCartItems[index].displayName}');
+    setState(() => _hookahCartItems.removeAt(index));
+  }
+
   Future<void> _submit(Lounge lounge) async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
     if (_arrivalAt == null) {
       setState(() => _error = 'Выберите время прибытия');
+      return;
+    }
+    if (_hookahCartItems.isEmpty) {
+      setState(() => _error = 'Выберите кальян');
       return;
     }
     setState(() => _loading = true);
@@ -209,14 +235,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     final client = GraphQLProvider.of(context).value;
     final result = await client.mutate(MutationOptions(
       document: gql(GQLMutations.createOrder(
-        loungeId:   lounge.id,
-        flavor:     _flavorCtrl.text.trim(),
-        comment:    _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
-        phoneLast4: PhoneHash.last4(phone),
-        phoneMock:  PhoneHash.mock(phone),
-        arrivalAt:  _arrivalAt!.toUtc().toIso8601String(),
-        tableId:    _selectedTableId,
-        guestCount: _selectedTableId != null ? _selectedGuestCount : null,
+        loungeId:    lounge.id,
+        hookahItems: _hookahCartItems.map((c) => c.input).toList(),
+        comment:     _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
+        phoneLast4:  PhoneHash.last4(phone),
+        phoneMock:   PhoneHash.mock(phone),
+        arrivalAt:   _arrivalAt!.toUtc().toIso8601String(),
+        tableId:     _selectedTableId,
+        guestCount:  _selectedTableId != null ? _selectedGuestCount : null,
       )),
     ));
 
@@ -236,7 +262,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       var order = Order.fromJson({
         ...orderData,
         'loungeId':  lounge.id,
-        'flavor':    _flavorCtrl.text,
         'comment':   _commentCtrl.text,
         'phone':     auth.phone ?? '',
         'arrivalAt': _arrivalAt?.toUtc().toIso8601String(),
@@ -346,17 +371,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               ),
               const SizedBox(height: 20),
               TextFormField(
-                controller: _flavorCtrl,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Вкус *',
-                  hintText: 'Например: Манго',
-                  prefixIcon: Icon(Icons.local_florist),
-                ),
-                validator: (v) => v == null || v.isEmpty ? 'Укажите вкус' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
                 controller: _commentCtrl,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
@@ -393,6 +407,48 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                   const SizedBox(width: 8),
                   _QuickTimeChip(label: '1 час',  onTap: () => _setArrivalIn(60)),
                 ],
+              ),
+              const SizedBox(height: 20),
+              if (_hookahCartItems.isNotEmpty) ...[
+                const Text('Кальян',
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                const SizedBox(height: 6),
+                for (var i = 0; i < _hookahCartItems.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${_hookahCartItems[i].displayName} × ${_hookahCartItems[i].input.quantity}',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                        Text(
+                          '${(_hookahCartItems[i].unitPrice * _hookahCartItems[i].input.quantity).toStringAsFixed(0)} ₽',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        IconButton(
+                          onPressed: () => _removeHookahFromCart(i),
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Убрать кальян',
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Text('Кальян на сумму: ${_hookahSubtotal.toStringAsFixed(0)} ₽',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 10),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _loading ? null : () => _addHookah(lounge),
+                  icon: const Icon(Icons.local_fire_department),
+                  label: const Text('кальян'),
+                ),
               ),
               const SizedBox(height: 20),
               if (_cartItems.isNotEmpty) ...[
