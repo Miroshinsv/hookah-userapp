@@ -3,11 +3,15 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/graphql/mutations.dart';
+import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/models/order.dart';
+import '../../core/notifications/push_navigation.dart' show findOrderById;
 import '../../core/utils/logger.dart';
 import '../../core/utils/phone_hash.dart';
+import '../table/hookah_item_picker.dart';
 import '../table/menu_item_picker.dart';
+import '../table/table_selection_screen.dart';
 
 class NewOrderScreen extends StatefulWidget {
   const NewOrderScreen({super.key});
@@ -35,7 +39,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   static const _tag = 'NewOrder';
 
   final _formKey    = GlobalKey<FormState>();
-  final _flavorCtrl = TextEditingController();
   final _commentCtrl = TextEditingController();
   DateTime? _arrivalAt;
   String?   _error;
@@ -46,13 +49,95 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   // addOrderItems, так как контракт addOrderItems требует существующий
   // orderId — добавить позиции в самой мутации createOrder нельзя.
   final List<MenuItemPickResult> _cartItems = [];
+  // Кальян, в отличие от меню, отправляется прямо в createOrder (аргумент
+  // hookahItems), поэтому отдельного докидывания через addOrderItems после
+  // создания заказа не требуется (hook.txt).
+  final List<HookahPickResult> _hookahCartItems = [];
+
+  bool _tablesEnabled = false;
+  bool _tablesEnabledLoaded = false;
+  bool _selectingTable = false;
+  String? _selectedTableId;
+  String? _selectedTableLabel;
+  int? _selectedGuestCount;
 
   double get _cartSubtotal =>
       _cartItems.fold(0.0, (sum, c) => sum + c.item.price * c.quantity);
 
+  double get _hookahSubtotal =>
+      _hookahCartItems.fold(0.0, (sum, c) => sum + c.unitPrice * c.input.quantity);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_tablesEnabledLoaded) {
+      _tablesEnabledLoaded = true;
+      final lounge = ModalRoute.of(context)!.settings.arguments as Lounge;
+      _loadTablesEnabled(lounge.id);
+    }
+  }
+
+  // Не блокирует остальную загрузку экрана — кнопка "Место" просто остаётся
+  // скрытой, пока флаг не резолвится (или если фича вообще не настроена для
+  // этого лаунджа / запрос упал), см. sitplace.txt.
+  Future<void> _loadTablesEnabled(String loungeId) async {
+    final client = GraphQLProvider.of(context).value;
+    final result = await client.query(QueryOptions(
+      document: gql(GQLQueries.isTablesEnabled(loungeId)),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted) return;
+    if (result.hasException) {
+      AppLogger.w(_tag, 'isTablesEnabled failed loungeId=$loungeId', result.exception);
+      return;
+    }
+    final enabled = result.data?['isTablesEnabled'] as bool? ?? false;
+    AppLogger.d(_tag, 'isTablesEnabled loungeId=$loungeId enabled=$enabled');
+    setState(() => _tablesEnabled = enabled);
+  }
+
+  // Предзаказный выбор стола — заказа ещё нет, поэтому TableSelectionScreen
+  // пушится с orderId: null (см. Task 14) и просто возвращает выбор, не
+  // вызывая openTableSession. Реальная попытка занять стол происходит
+  // внутри createOrder при отправке формы (_submit).
+  Future<void> _selectTable(Lounge lounge) async {
+    setState(() => _selectingTable = true);
+    AppLogger.d(_tag, 'open pre-order table selection loungeId=${lounge.id}');
+
+    final result = await Navigator.push<TableSelectionResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TableSelectionScreen(loungeId: lounge.id, orderId: null),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => _selectingTable = false);
+    if (result == null) return;
+
+    setState(() {
+      _selectedTableId = result.tableId;
+      _selectedTableLabel = result.tableLabel;
+      _selectedGuestCount = result.guestCount;
+    });
+    AppLogger.i(
+      _tag,
+      'table pre-selected tableId=${result.tableId} tableLabel=${result.tableLabel} '
+      'guestCount=${result.guestCount}',
+    );
+  }
+
+  void _clearSelectedTable() {
+    AppLogger.d(_tag, 'clear pre-selected table tableId=$_selectedTableId');
+    setState(() {
+      _selectedTableId = null;
+      _selectedTableLabel = null;
+      _selectedGuestCount = null;
+    });
+  }
+
   @override
   void dispose() {
-    _flavorCtrl.dispose();
     _commentCtrl.dispose();
     super.dispose();
   }
@@ -117,11 +202,31 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     setState(() => _cartItems.removeAt(index));
   }
 
+  Future<void> _addHookah(Lounge lounge) async {
+    final picked = await showHookahItemPicker(context, loungeId: lounge.id);
+    if (picked == null || !mounted) return;
+
+    AppLogger.d(_tag, 'hookah cart add ${picked.displayName} quantity=${picked.input.quantity}');
+    setState(() {
+      _hookahCartItems.add(picked);
+      _error = null;
+    });
+  }
+
+  void _removeHookahFromCart(int index) {
+    AppLogger.d(_tag, 'hookah cart remove ${_hookahCartItems[index].displayName}');
+    setState(() => _hookahCartItems.removeAt(index));
+  }
+
   Future<void> _submit(Lounge lounge) async {
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
     if (_arrivalAt == null) {
       setState(() => _error = 'Выберите время прибытия');
+      return;
+    }
+    if (_hookahCartItems.isEmpty) {
+      setState(() => _error = 'Выберите кальян');
       return;
     }
     setState(() => _loading = true);
@@ -131,12 +236,14 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     final client = GraphQLProvider.of(context).value;
     final result = await client.mutate(MutationOptions(
       document: gql(GQLMutations.createOrder(
-        loungeId:   lounge.id,
-        flavor:     _flavorCtrl.text.trim(),
-        comment:    _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
-        phoneLast4: PhoneHash.last4(phone),
-        phoneMock:  PhoneHash.mock(phone),
-        arrivalAt:  _arrivalAt!.toUtc().toIso8601String(),
+        loungeId:    lounge.id,
+        hookahItems: _hookahCartItems.map((c) => c.input).toList(),
+        comment:     _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim(),
+        phoneLast4:  PhoneHash.last4(phone),
+        phoneMock:   PhoneHash.mock(phone),
+        arrivalAt:   _arrivalAt!.toUtc().toIso8601String(),
+        tableId:     _selectedTableId,
+        guestCount:  _selectedTableId != null ? _selectedGuestCount : null,
       )),
     ));
 
@@ -156,7 +263,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       var order = Order.fromJson({
         ...orderData,
         'loungeId':  lounge.id,
-        'flavor':    _flavorCtrl.text,
         'comment':   _commentCtrl.text,
         'phone':     auth.phone ?? '',
         'arrivalAt': _arrivalAt?.toUtc().toIso8601String(),
@@ -167,9 +273,58 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         if (!mounted) return;
       }
 
-      Navigator.pushReplacementNamed(context, '/order',
-          arguments: {'order': order, 'lounge': lounge});
+      // Кальян отправляется прямо в createOrder, но её inline-ответ иногда
+      // не отражает только что созданные hookahItems (сообщено пользователем:
+      // заказ с кальяном "классический" создался, но на order_detail_screen
+      // секция позиций была пустой). Подстраховываемся свежим orders() сразу
+      // после создания вместо слепого доверия ответу мутации.
+      final reloaded = await _reloadFreshOrder(client, order.id);
+      if (!mounted) return;
+      if (reloaded != null) order = reloaded;
+
+      final tableSeatConflict = orderData['tableSeatConflict'] as bool? ?? false;
+      if (tableSeatConflict) {
+        AppLogger.w(
+          _tag,
+          'createOrder table conflict orderId=${order.id} tableId=$_selectedTableId — '
+          'order created without the table, guest must retry from the order screen',
+        );
+      }
+
+      Navigator.pushReplacementNamed(context, '/order', arguments: {
+        'order': order,
+        'lounge': lounge,
+        'tableSeatConflict': tableSeatConflict,
+      });
     }
+  }
+
+  // Свежий orders() сразу после createOrder — источник истины на случай,
+  // если inline-ответ мутации не успел отразить только что созданные
+  // hookahItems. Сбой или отсутствие заказа в списке не блокирует переход
+  // на экран заказа — просто остаётся то, что вернул createOrder напрямую.
+  Future<Order?> _reloadFreshOrder(GraphQLClient client, String orderId) async {
+    final result = await client.query(QueryOptions(
+      document: gql(GQLQueries.orders),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted || result.hasException || result.data == null) {
+      AppLogger.w(_tag, 'reload after createOrder failed orderId=$orderId', result.exception);
+      return null;
+    }
+    final raw = (result.data!['orders'] as List<dynamic>?) ?? const [];
+    final orders = raw.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
+    final found = findOrderById(orders, orderId);
+    if (found == null) {
+      AppLogger.w(_tag, 'reload after createOrder: order not found orderId=$orderId');
+    } else {
+      AppLogger.d(
+        _tag,
+        'reload after createOrder ok orderId=$orderId hookahItems=${found.hookahItems.length} '
+        'menuItems=${found.menuItems.length}',
+      );
+    }
+    return found;
   }
 
   // createOrder не принимает позиции меню — контракт addOrderItems требует
@@ -254,17 +409,6 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               ),
               const SizedBox(height: 20),
               TextFormField(
-                controller: _flavorCtrl,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'Вкус *',
-                  hintText: 'Например: Манго',
-                  prefixIcon: Icon(Icons.local_florist),
-                ),
-                validator: (v) => v == null || v.isEmpty ? 'Укажите вкус' : null,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
                 controller: _commentCtrl,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
@@ -301,6 +445,48 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                   const SizedBox(width: 8),
                   _QuickTimeChip(label: '1 час',  onTap: () => _setArrivalIn(60)),
                 ],
+              ),
+              const SizedBox(height: 20),
+              if (_hookahCartItems.isNotEmpty) ...[
+                const Text('Кальян',
+                    style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                const SizedBox(height: 6),
+                for (var i = 0; i < _hookahCartItems.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${_hookahCartItems[i].displayName} × ${_hookahCartItems[i].input.quantity}',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                        Text(
+                          '${(_hookahCartItems[i].unitPrice * _hookahCartItems[i].input.quantity).toStringAsFixed(0)} ₽',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        IconButton(
+                          onPressed: () => _removeHookahFromCart(i),
+                          icon: const Icon(Icons.close, size: 18),
+                          tooltip: 'Убрать кальян',
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 4),
+                Text('Кальян на сумму: ${_hookahSubtotal.toStringAsFixed(0)} ₽',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 10),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _loading ? null : () => _addHookah(lounge),
+                  icon: const Icon(Icons.local_fire_department),
+                  label: const Text('кальян'),
+                ),
               ),
               const SizedBox(height: 20),
               if (_cartItems.isNotEmpty) ...[
@@ -342,6 +528,36 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                   label: const Text('меню'),
                 ),
               ),
+              if (_tablesEnabled) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _loading || _selectingTable ? null : () => _selectTable(lounge),
+                    icon: const Icon(Icons.event_seat),
+                    label: const Text('место'),
+                  ),
+                ),
+                if (_selectedTableLabel != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Стол: $_selectedTableLabel · $_selectedGuestCount гостей',
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _loading ? null : _clearSelectedTable,
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Убрать выбор стола',
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ],
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),

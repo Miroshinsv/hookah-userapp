@@ -32,6 +32,10 @@ class OrderHookahItem {
   final int quantity;
   final double unitPrice;
   final String status;
+  final String? source;
+  final String? templateId;
+  final int? strength;
+  final String? comment;
 
   const OrderHookahItem({
     required this.id,
@@ -40,6 +44,10 @@ class OrderHookahItem {
     required this.quantity,
     required this.unitPrice,
     required this.status,
+    this.source,
+    this.templateId,
+    this.strength,
+    this.comment,
   });
 
   factory OrderHookahItem.fromJson(Map<String, dynamic> json) => OrderHookahItem(
@@ -49,6 +57,10 @@ class OrderHookahItem {
         quantity: (json['quantity'] as num?)?.toInt() ?? 1,
         unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0.0,
         status: json['status'] as String? ?? 'new',
+        source: json['source'] as String?,
+        templateId: json['templateId'] as String?,
+        strength: (json['strength'] as num?)?.toInt(),
+        comment: json['comment'] as String?,
       );
 }
 
@@ -69,6 +81,9 @@ class Order {
   final List<OrderHookahItem> hookahItems;
   final double? subtotal;
   final double? finalTotal;
+  final String? tableId;
+  final String? tableLabel;
+  final bool tableSeatConflict;
 
   const Order({
     required this.id,
@@ -83,6 +98,9 @@ class Order {
     this.hookahItems = const [],
     this.subtotal,
     this.finalTotal,
+    this.tableId,
+    this.tableLabel,
+    this.tableSeatConflict = false,
   });
 
   bool get isEditable => _editableOrderStatuses.contains(status);
@@ -106,6 +124,9 @@ class Order {
             const [],
         subtotal: (json['subtotal'] as num?)?.toDouble(),
         finalTotal: (json['finalTotal'] as num?)?.toDouble(),
+        tableId: json['tableId'] as String?,
+        tableLabel: json['tableLabel'] as String?,
+        tableSeatConflict: json['tableSeatConflict'] as bool? ?? false,
       );
 
   Order copyWith({
@@ -114,6 +135,9 @@ class Order {
     List<OrderHookahItem>? hookahItems,
     double? subtotal,
     double? finalTotal,
+    String? tableId,
+    String? tableLabel,
+    bool? tableSeatConflict,
   }) =>
       Order(
         id: id,
@@ -128,5 +152,8 @@ class Order {
         hookahItems: hookahItems ?? this.hookahItems,
         subtotal: subtotal ?? this.subtotal,
         finalTotal: finalTotal ?? this.finalTotal,
+        tableId: tableId ?? this.tableId,
+        tableLabel: tableLabel ?? this.tableLabel,
+        tableSeatConflict: tableSeatConflict ?? this.tableSeatConflict,
       );
 }

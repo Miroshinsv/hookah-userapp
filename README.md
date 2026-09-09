@@ -16,6 +16,7 @@ flutter run
 - **Lounges** — browse nearby lounges on a map, view details, ratings, and staff
 - **Orders** — place an order, track its status live, and add menu items to it while it's still open
 - **Table sessions** — join an already-open table session and add menu items yourself, without flagging down staff
+- **Table selection** — pick a specific table for your order on the lounge's floor plan (pan/zoom map, occupancy shown live)
 - **Tobacco catalog** — browse a lounge's available tobaccos
 - **Chat** — message lounge staff or a specific staff member directly
 - **Push notifications** — get notified of order status changes even when the app is backgrounded
@@ -26,6 +27,7 @@ flutter run
 |-------|-------------|
 | [Guest Table Sessions, Tobacco Catalog & Push](docs/guest-table-sessions.md) | Joining a table session, adding items, tobacco catalog, FCM push registration & order-status alerts |
 | [Order Menu Items](docs/order-menu-items.md) | Adding menu items to an already-open order, item/total display, error handling, and reacting to staff-side confirm/cancel/delete actions via chat |
+| [Table Selection](docs/table-selection.md) | Picking a table for an order on the lounge's floor plan — occupancy rules, guest-count picker, and the "table occupied" race |
 
 ## Getting Started (Flutter)
 

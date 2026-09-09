@@ -51,6 +51,16 @@ void main() {
 
       expect(query, contains('minRating: 0'));
     });
+
+    test('requests ownerUserId (needed to tell connected lounges apart on the map)', () {
+      final query = GQLQueries.loungesPage(
+        latitude: 0,
+        longitude: 0,
+        zoom: 10,
+      );
+
+      expect(query, contains('ownerUserId'));
+    });
   });
 
   group('LoungeMapItem.fromJson', () {
@@ -96,6 +106,84 @@ void main() {
       expect(item.distanceKm, isNull);
       expect(item.is24Hours, true);
       expect(item.status, '24h');
+    });
+
+    test('parses ownerUserId when present (drives opaque marker for connected lounges)', () {
+      final item = LoungeMapItem.fromJson({
+        'id': '1',
+        'name': 'Test Lounge',
+        'latitude': 55.7558,
+        'longitude': 37.6173,
+        'is24Hours': false,
+        'status': 'open',
+        'ownerUserId': 'u1',
+      });
+
+      expect(item.ownerUserId, 'u1');
+    });
+
+    test('ownerUserId defaults to null when absent (dims the marker as not connected)', () {
+      final item = LoungeMapItem.fromJson({
+        'id': '2',
+        'name': 'Unclaimed Lounge',
+        'latitude': 55.0,
+        'longitude': 37.0,
+        'is24Hours': false,
+        'status': 'open',
+      });
+
+      expect(item.ownerUserId, isNull);
+    });
+  });
+
+  group('LoungeMapItem.isConnected', () {
+    test('true when ownerUserId is a non-empty string', () {
+      const item = LoungeMapItem(
+        id: '1',
+        name: 'A',
+        latitude: 0,
+        longitude: 0,
+        status: 'open',
+        ownerUserId: 'u1',
+      );
+      expect(item.isConnected, isTrue);
+    });
+
+    test('false when ownerUserId is null', () {
+      const item = LoungeMapItem(id: '1', name: 'A', latitude: 0, longitude: 0, status: 'open');
+      expect(item.isConnected, isFalse);
+    });
+
+    test('false when ownerUserId is an empty string', () {
+      const item = LoungeMapItem(
+        id: '1',
+        name: 'A',
+        latitude: 0,
+        longitude: 0,
+        status: 'open',
+        ownerUserId: '',
+      );
+      expect(item.isConnected, isFalse);
+    });
+
+    test('is independent of open/closed status', () {
+      const closedButConnected = LoungeMapItem(
+        id: '1',
+        name: 'A',
+        latitude: 0,
+        longitude: 0,
+        status: 'closed',
+        ownerUserId: 'u1',
+      );
+      const openButNotConnected = LoungeMapItem(
+        id: '2',
+        name: 'B',
+        latitude: 0,
+        longitude: 0,
+        status: 'open',
+      );
+      expect(closedButConnected.isConnected, isTrue);
+      expect(openButNotConnected.isConnected, isFalse);
     });
   });
 
