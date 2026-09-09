@@ -489,8 +489,8 @@ class _HookahPickerSheetState extends State<_HookahPickerSheet> {
         TextField(
           controller: _confirmCommentCtrl,
           decoration: const InputDecoration(
-            labelText: 'Комментарий к кальяну',
-            hintText: 'Например: поменьше дыма',
+            labelText: 'Вкус',
+            hintText: 'манго-маракуйя с мятой',
           ),
           maxLines: 2,
         ),
@@ -632,8 +632,8 @@ class _HookahPickerSheetState extends State<_HookahPickerSheet> {
         TextField(
           controller: _constructorCommentCtrl,
           decoration: const InputDecoration(
-            labelText: 'Комментарий к кальяну',
-            hintText: 'Например: поменьше дыма',
+            labelText: 'Вкус',
+            hintText: 'манго-маракуйя с мятой',
           ),
           maxLines: 2,
         ),

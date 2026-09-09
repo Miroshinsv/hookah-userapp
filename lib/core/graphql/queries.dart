@@ -101,6 +101,9 @@ class GQLQueries {
         hookahItems { id name flavor source templateId strength comment quantity unitPrice status }
         subtotal
         finalTotal
+        tableId
+        tableLabel
+        tableSeatConflict
       }
     }
   ''';

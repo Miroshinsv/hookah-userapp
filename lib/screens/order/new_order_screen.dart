@@ -6,6 +6,7 @@ import '../../core/graphql/mutations.dart';
 import '../../core/graphql/queries.dart';
 import '../../core/models/lounge.dart';
 import '../../core/models/order.dart';
+import '../../core/notifications/push_navigation.dart' show findOrderById;
 import '../../core/utils/logger.dart';
 import '../../core/utils/phone_hash.dart';
 import '../table/hookah_item_picker.dart';
@@ -272,6 +273,15 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         if (!mounted) return;
       }
 
+      // Кальян отправляется прямо в createOrder, но её inline-ответ иногда
+      // не отражает только что созданные hookahItems (сообщено пользователем:
+      // заказ с кальяном "классический" создался, но на order_detail_screen
+      // секция позиций была пустой). Подстраховываемся свежим orders() сразу
+      // после создания вместо слепого доверия ответу мутации.
+      final reloaded = await _reloadFreshOrder(client, order.id);
+      if (!mounted) return;
+      if (reloaded != null) order = reloaded;
+
       final tableSeatConflict = orderData['tableSeatConflict'] as bool? ?? false;
       if (tableSeatConflict) {
         AppLogger.w(
@@ -287,6 +297,34 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         'tableSeatConflict': tableSeatConflict,
       });
     }
+  }
+
+  // Свежий orders() сразу после createOrder — источник истины на случай,
+  // если inline-ответ мутации не успел отразить только что созданные
+  // hookahItems. Сбой или отсутствие заказа в списке не блокирует переход
+  // на экран заказа — просто остаётся то, что вернул createOrder напрямую.
+  Future<Order?> _reloadFreshOrder(GraphQLClient client, String orderId) async {
+    final result = await client.query(QueryOptions(
+      document: gql(GQLQueries.orders),
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (!mounted || result.hasException || result.data == null) {
+      AppLogger.w(_tag, 'reload after createOrder failed orderId=$orderId', result.exception);
+      return null;
+    }
+    final raw = (result.data!['orders'] as List<dynamic>?) ?? const [];
+    final orders = raw.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
+    final found = findOrderById(orders, orderId);
+    if (found == null) {
+      AppLogger.w(_tag, 'reload after createOrder: order not found orderId=$orderId');
+    } else {
+      AppLogger.d(
+        _tag,
+        'reload after createOrder ok orderId=$orderId hookahItems=${found.hookahItems.length} '
+        'menuItems=${found.menuItems.length}',
+      );
+    }
+    return found;
   }
 
   // createOrder не принимает позиции меню — контракт addOrderItems требует
